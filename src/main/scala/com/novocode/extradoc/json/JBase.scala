@@ -3,6 +3,7 @@ package com.novocode.extradoc.json
 import java.io.{StringWriter, Writer}
 
 import scala.collection._
+import scala.reflect.ClassManifest
 
 abstract class CanBeValue[-T] {
   def isEmpty(v: T): Boolean

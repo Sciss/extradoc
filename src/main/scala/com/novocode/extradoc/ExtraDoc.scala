@@ -4,7 +4,7 @@ package com.novocode.extradoc
 
 import java.io.File
 
-import scala.collection.mutable
+import scala.collection.{mutable, Seq => CSeq}
 import scala.reflect.internal.util.FakePos
 import scala.tools.nsc.reporters.ConsoleReporter
 import scala.tools.nsc.{CompilerCommand, FatalError, Properties}
@@ -12,14 +12,14 @@ import scala.tools.nsc.{CompilerCommand, FatalError, Properties}
 /** The main class for scaladoc, a front-end for the Scala compiler 
  *  that generates documentation from source files.
  */
-object ExtraDoc {
+object ExtraDoc extends CompilerSupport {
 
   val versionMsg: String =
     s"ExtraDoc - based on ScalaDoc ${Properties.versionString} -- ${Properties.copyrightString}"
 
   var reporter: ConsoleReporter = _
   
-  def scalaFiles(base: File, name: String): Seq[String] = {
+  def scalaFiles(base: File, name: String): CSeq[String] = {
     val b = mutable.Buffer.empty[String]
     def collect(f: File, s: String): Unit = {
       //println(s"Scanning ${f.getPath}")
@@ -88,11 +88,11 @@ object ExtraDoc {
           reporter.error(null, s"fatal error: $msg")
       }
       finally {
-        reporter.printSummary()
+        summary(reporter)
       }
     }
-    
   }
+
 
   def main(args: Array[String]): Unit = {
     process(args)

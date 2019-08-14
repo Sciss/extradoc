@@ -1,4 +1,14 @@
-Extradoc
+# Extradoc
+
+A variant of the scala-doc documentation tool that can output JSON format.
+Original code 
+
+Note: when using Scala 2.13, HTML output is currently not yet working (impedance mismatch between scala.xml
+and home baked XML replacement in scala-doc).
+
+Below is the original read-me.
+
+---
 
 An extended version of Scala's scaladoc command. It has all the features (and
 the command line syntax) of the original Scaladoc, plus:

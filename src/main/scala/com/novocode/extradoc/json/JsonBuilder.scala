@@ -1,10 +1,14 @@
 package com.novocode.extradoc.json
 
+import com.novocode.extradoc.XmlSupport._
+
 import scala.collection._
+import scala.language.implicitConversions
+import scala.reflect.ClassManifest
 import scala.reflect.internal.Reporter
-import scala.tools.nsc.doc.base.comment._
+import scala.tools.nsc.doc.base.{comment => cm}
 import scala.tools.nsc.doc.model._
-import scala.xml.{Elem, NodeBuffer, NodeSeq, Text, Xhtml}
+import scala.xml.{Elem, Node, NodeBuffer, NodeSeq, Text, Xhtml}
 
 abstract class JsonBuilder { builder =>
 
@@ -32,22 +36,24 @@ abstract class JsonBuilder { builder =>
     protected def docletReporter: Reporter = builder.reporter
   }
 
-  def createHtml(f: HtmlGen => NodeSeq): JObject = {
+  def createHtml(f: HtmlGen => Elems): JObject = {
     val gen = new CollectingHtmlGen
     val ns = f(gen)
     val j = new JObject
     j +?= "_links" -> gen.links
-    j += "_html" -> gen.mkString(ns)
+    j += "_html" -> XmlMkString(ns) // gen.mkString(ns)
     j
   }
 
-  def createBody(b: Body): JObject = createHtml(_.bodyToHtml(b))
+  implicit def nodeSeqFromList(in: Seq[Node]): NodeSeq = NodeSeq.fromSeq(in)
 
-  def createBlock(b: Block): JObject = createHtml(_.blockToHtml(b))
+  def createBody(b: cm.Body): JObject = createHtml(_.bodyToHtml(b))
 
-  def createInline(i: Inline): JObject = createHtml(_.inlineToHtml(i))
+  def createBlock(b: cm.Block): JObject = createHtml(_.blockToHtml(b))
 
-  def createComment(c: Comment): (JObject, Map[String, JObject], Map[String, JObject]) = {
+  def createInline(i: cm.Inline): JObject = createHtml(_.inlineToHtml(i))
+
+  def createComment(c: cm.Comment): (JObject, Map[String, JObject], Map[String, JObject]) = {
     val j             = new JObject
     val bodyDoc       = createBody(c.body)
     val bodyIsEmpty   = (bodyDoc("_html") getOrElse "") == ""
@@ -182,17 +188,19 @@ abstract class JsonBuilder { builder =>
         if (m.visibility.isPublic) j += "isPublic" -> true
       }
 
-      as[PrivateInTemplate  ](m.visibility) { p =>
-        p.owner.foreach { owner =>
-          j += "visibleIn" -> global(owner)(createEntity _)
-        }
-      }
+      // XXX TODO: owner is `Option[Entity] in 2.12, and `Entity` in 2.13
 
-      as[ProtectedInTemplate](m.visibility) { p =>
-        p.owner.foreach { owner =>
-          j += "visibleIn" -> global(owner)(createEntity _)
-        }
-      }
+//      as[PrivateInTemplate  ](m.visibility) { p =>
+//        p.owner.foreach { owner =>
+//          j += "visibleIn" -> global(owner)(createEntity _)
+//        }
+//      }
+//
+//      as[ProtectedInTemplate](m.visibility) { p =>
+//        p.owner.foreach { owner =>
+//          j += "visibleIn" -> global(owner)(createEntity _)
+//        }
+//      }
 
       if (mergeInheritedMembers) {
         // XXX TODO
@@ -391,7 +399,7 @@ abstract class JsonBuilder { builder =>
   def createValueParams(vp: List[List[ValueParam]], docs: Map[String, JObject]): JArray = {
     JArray(vp.map(l => JArray(l.map(e => global(e) { e =>
       val j = createEntity(e)
-      docs get e.name foreach { doc => j += "doc" -> doc }
+      docs.get(e.name).foreach { doc => j += "doc" -> doc }
       j
     }))))
   }
@@ -399,7 +407,7 @@ abstract class JsonBuilder { builder =>
   def createTypeParams(tp: List[TypeParam], docs: Map[String, JObject]): JArray = {
     JArray(tp.map(e => global(e) { e =>
       val j = createEntity(e)
-      docs get e.name foreach { doc => j += "doc" -> doc }
+      docs.get(e.name).foreach { doc => j += "doc" -> doc }
       j
     }))
   }
