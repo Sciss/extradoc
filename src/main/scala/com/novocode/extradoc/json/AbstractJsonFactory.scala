@@ -63,7 +63,7 @@ abstract class AbstractJsonFactory(val universe: doc.Universe, val reporter: Rep
             if (ord + 1 == globalEntityOrdinals.size) {
               // No dependent entities were built by f, so there cannot be any references to ord yet
               allModels += ord -> o
-              allModelsReverse get o match {
+              allModelsReverse.get(o) match {
                 case Some(oldOrd) =>
                   globalEntityOrdinals.remove(EntityHash(e))
                   Link(oldOrd)
@@ -73,7 +73,7 @@ abstract class AbstractJsonFactory(val universe: doc.Universe, val reporter: Rep
                   Link(ord)
               }
             } else {
-              allModels += ord -> o
+              allModels        += ord -> o
               allModelsReverse += o -> ord
               Link(ord)
             }
@@ -140,7 +140,7 @@ abstract class AbstractJsonFactory(val universe: doc.Universe, val reporter: Rep
       else None
     }
 
-    allModels.values foreach { j =>
+    allModels.values.foreach { j =>
       j.getOrElse("typeParams", JArray.Empty).transform {
         case (_, l@Link(t)) => simple(t).getOrElse(l)
         case (_, o) => o
