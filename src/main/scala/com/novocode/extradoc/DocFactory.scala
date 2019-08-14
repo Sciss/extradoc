@@ -4,8 +4,8 @@
 package com.novocode.extradoc
 
 import scala.tools.nsc._
-import doc._
-import reporters.Reporter
+import scala.tools.nsc.doc._
+import scala.tools.nsc.reporters.Reporter
 
 /** A documentation processor controls the process of generating Scala documentation, which is as follows.
   *
@@ -23,44 +23,48 @@ import reporters.Reporter
   * @param reporter The reporter to which both documentation and compilation errors will be reported.
   * @param settings The settings to be used by the documenter and compiler for generating documentation.
   * 
-  * @author Gilles Dubochet */
+  * @author Gilles Dubochet
+  */
 class DocFactory(val reporter: Reporter, val settings: doc.Settings) { processor =>
 
   /** The unique compiler instance used by this processor and constructed from its `settings`. */
   object compiler extends Global(settings, reporter) {
-    override protected def computeInternalPhases() {
+    override protected def computeInternalPhases(): Unit = {
       phasesSet += syntaxAnalyzer
       phasesSet += analyzer.namerFactory
       phasesSet += analyzer.packageObjects
       phasesSet += analyzer.typerFactory
       phasesSet += superAccessors
       phasesSet += pickler
-      phasesSet += refchecks
+      phasesSet += refChecks
     }
     override def onlyPresentation = true
-    lazy val addSourceless = {
-      val sless = new SourcelessComments { val global = compiler }
-      docComments ++= sless.comments
+
+    lazy val addSourceless: Unit = {
+      // XXX TODO
+
+//      val sless = new SourcelessComments { val global = compiler }
+//      docComments ++= sless.comments
     }
   }
 
   /** Creates a scaladoc site for all symbols defined in this call's `files`, as well as those defined in `files` of
     * previous calls to the same processor.
-    * @param files The list of paths (relative to the compiler's source path, or absolute) of files to document. */
+    * @param files The list of paths (relative to the compiler's source path, or absolute) of files to document.
+    */
   def document(files: List[String]): Unit = {
-    (new compiler.Run()) compile files
+    new compiler.Run().compile(files)
     compiler.addSourceless
     if (!reporter.hasErrors) {
-      val modelFactory = (new model.ModelFactory(compiler, settings) with model.comment.CommentFactory)
-      val docModel = modelFactory.makeModel
-      println("model contains " + modelFactory.templatesCount + " documentable templates")
+      val modelFactory = (new model.ModelFactory(compiler, settings) with model./*comment.*/CommentFactory)
+      val docModel = modelFactory.makeModel.getOrElse(throw new IllegalStateException("docModel is empty")) // HH
+      println(s"model contains ${modelFactory.templatesCount} documentable templates")
       settings.docformat.value match {
-        case "html" => (new html.HtmlFactory(docModel)) generate docModel
-        case "json" => (new json.JsonFactory(docModel)) generate docModel
-        case "json-multi" => (new json.JsonMultiFactory(docModel)) generate docModel
-        case "explorer" => (new json.JsonMultiFactory(docModel, explorer = true)) generate docModel
+        case "html"       => (new html.HtmlFactory      (docModel)) generate docModel
+        case "json"       => (new json.JsonFactory      (docModel)) generate docModel
+        case "json-multi" => (new json.JsonMultiFactory (docModel)) generate docModel
+        case "explorer"   => (new json.JsonMultiFactory (docModel, explorer = true)) generate docModel
 	    }
     }
   }
-  
 }

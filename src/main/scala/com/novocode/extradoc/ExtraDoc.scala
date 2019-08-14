@@ -6,26 +6,23 @@ import java.io.File
 
 import scala.collection.mutable.ArrayBuffer
 import scala.tools.nsc._
-import scala.tools.nsc.reporters.{Reporter, ConsoleReporter}
-import scala.tools.nsc.util.FakePos //{Position}
-import Properties.msilLibPath
-import File.pathSeparator
+import scala.tools.nsc.reporters.ConsoleReporter
+import scala.tools.nsc.util.FakePos
 
 /** The main class for scaladoc, a front-end for the Scala compiler 
  *  that generates documentation from source files.
  */
 object ExtraDoc {
 
-  val versionMsg: String = "ExtraDoc - based on ScalaDoc" +
-    Properties.versionString + " -- " +
-    Properties.copyrightString
+  val versionMsg: String =
+    s"ExtraDoc - based on ScalaDoc ${Properties.versionString} -- ${Properties.copyrightString}"
 
   var reporter: ConsoleReporter = _
   
   def scalaFiles(base: File, name: String): Seq[String] = {
     val b = new ArrayBuffer[String]
-    def collect(f: File, s: String) {
-      //println("Scanning "+f.getPath)
+    def collect(f: File, s: String): Unit = {
+      //println(s"Scanning ${f.getPath}")
       val fn = f.getName
       if(f.isDirectory) {
         if(fn == "." || !fn.startsWith(".")) {
@@ -40,7 +37,7 @@ object ExtraDoc {
   }
 
   def error(msg: String): Unit = {
-    reporter.error(FakePos("scalac"), msg + "\n  scalac -help  gives more information")
+    reporter.error(FakePos("scalac"), s"$msg\n  scalac -help  gives more information")
   }
 
   def process(args: Array[String]): Unit = {
@@ -55,22 +52,24 @@ object ExtraDoc {
     if (!reporter.hasErrors) { // No need to continue if reading the command generated errors
       
       if (docSettings.version.value)
-        reporter.info(null, versionMsg, true)
+        reporter.info(null, versionMsg, force = true)
       else if (docSettings.help.value) {
-        reporter.info(null, command.usageMsg, true)
+        reporter.info(null, command.usageMsg, force = true)
       }
       else if (docSettings.Xhelp.value) 
-        reporter.info(null, command.xusageMsg, true)
+        reporter.info(null, command.xusageMsg, force = true)
       else if (docSettings.Yhelp.value) 
-        reporter.info(null, command.yusageMsg, true)
+        reporter.info(null, command.yusageMsg, force = true)
       else if (docSettings.showPlugins.value)
         reporter.warning(null, "Plugins are not available when using Scaladoc")
       else if (docSettings.showPhases.value)
         reporter.warning(null, "Phases are restricted when using Scaladoc")
       else try {
-        
-        if (docSettings.target.value == "msil")
-          msilLibPath foreach (x => docSettings.assemrefs.value += (pathSeparator + x))
+
+        // HH: dropped
+
+//        if (docSettings.target.value == "msil")
+//          msilLibPath foreach (x => docSettings.assemrefs.value += s"${pathSeparator}x"))
         
         val sourcePath = docSettings.sourcepath.value
         val expFiles = command.files.flatMap { fname: String =>
@@ -78,14 +77,14 @@ object ExtraDoc {
           scalaFiles(f, fname)
         }
         val docProcessor = new DocFactory(reporter, docSettings)
-        //println("Found sources: "+expFiles.mkString(","))
+        //println(s"Found sources: ${expFiles.mkString(",")}")
         docProcessor.document(expFiles)
         
       }
       catch {
         case ex @ FatalError(msg) =>
-          if (docSettings.debug.value) ex.printStackTrace();
-          reporter.error(null, "fatal error: " + msg)
+          if (docSettings.debug.value) ex.printStackTrace()
+          reporter.error(null, s"fatal error: $msg")
       }
       finally {
         reporter.printSummary()
@@ -96,7 +95,7 @@ object ExtraDoc {
 
   def main(args: Array[String]): Unit = {
     process(args)
-    exit(if (reporter.hasErrors) 1 else 0)
+    sys.exit(if (reporter.hasErrors) 1 else 0)
   }
   
 }
