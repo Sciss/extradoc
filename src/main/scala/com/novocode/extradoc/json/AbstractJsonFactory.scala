@@ -2,12 +2,12 @@ package com.novocode.extradoc.json
 
 import java.io.{InputStream, File => JFile}
 
-import scala.collection._
-import scala.tools.nsc.doc._
+import scala.collection.mutable
+import scala.tools.nsc.doc
 import scala.tools.nsc.io.{Directory, Streamable}
 import scala.tools.nsc.reporters.Reporter
 
-abstract class AbstractJsonFactory(val universe: Universe, val reporter: Reporter) {
+abstract class AbstractJsonFactory(val universe: doc.Universe, val reporter: Reporter) {
   self =>
 
   val doInline              = true
@@ -16,7 +16,7 @@ abstract class AbstractJsonFactory(val universe: Universe, val reporter: Reporte
   val removeSimpleBodyDocs  = false
   val simpleParamsAsString  = false
 
-  def prepareModel(universe: Universe): mutable.Map[Int, JObject] = {
+  def prepareModel(universe: doc.Universe): mutable.Map[Int, JObject] = {
     println("Building JSON model")
 
     val (allModels, allModelsReverse) = buildModels(universe)
@@ -42,7 +42,7 @@ abstract class AbstractJsonFactory(val universe: Universe, val reporter: Reporte
     allModels
   }
 
-  def buildModels(universe: Universe): (mutable.Map[Int, JObject], mutable.Map[JObject, Int]) = {
+  def buildModels(universe: doc.Universe): (mutable.Map[Int, JObject], mutable.Map[JObject, Int]) = {
     val globalEntityOrdinals  = mutable.Map.empty[EntityHash[AnyRef /*Entity*/], Int]
     val allModels             = mutable.Map.empty[Int, JObject]
     val allModelsReverse      = mutable.Map.empty[JObject, Int]
@@ -65,10 +65,10 @@ abstract class AbstractJsonFactory(val universe: Universe, val reporter: Reporte
               allModels += ord -> o
               allModelsReverse get o match {
                 case Some(oldOrd) =>
-                  globalEntityOrdinals remove EntityHash(e)
+                  globalEntityOrdinals.remove(EntityHash(e))
                   Link(oldOrd)
                 case None =>
-                  allModels += ord -> o
+                  allModels        += ord -> o
                   allModelsReverse += o -> ord
                   Link(ord)
               }
@@ -91,11 +91,11 @@ abstract class AbstractJsonFactory(val universe: Universe, val reporter: Reporte
     val verified = mutable.Set.empty[Int]
 
     def f(ord: Int, j: JBase): Unit = {
-      if (ord == -1 || !(verified contains ord)) {
+      if (ord == -1 || !verified.contains(ord)) {
         if (ord != -1) verified += ord
         for (ch <- j.links) {
           count += 1
-          m get ch.target match {
+          m.get(ch.target) match {
             case Some(j) =>
               f(ch.target, j)
             case None =>
@@ -119,16 +119,13 @@ abstract class AbstractJsonFactory(val universe: Universe, val reporter: Reporte
     allModels --= duplicates
 
     def replaceIn(j: JBase): Unit = {
-      j replaceLinks repl
-      j.children foreach {
-        replaceIn
-      }
+      j.replaceLinks(repl)
+      j.children.foreach(replaceIn)
     }
 
-    allModels.values foreach {
-      replaceIn
-    }
-    allModelsReverse.clear
+    allModels.values.foreach(replaceIn)
+
+    allModelsReverse.clear()
     for ((ord, j) <- allModels) allModelsReverse += j -> ord
     println(s"Compacted to ${allModels.size} global objects (${allModelsReverse.size} unique)")
   }
@@ -157,7 +154,7 @@ abstract class AbstractJsonFactory(val universe: Universe, val reporter: Reporte
         case _ =>
       } */
     }
-    allModelsReverse.clear
+    allModelsReverse.clear()
     for ((ord, j) <- allModels) allModelsReverse += j -> ord
     println(s"Compacted to ${allModels.size} global objects (${allModelsReverse.size} unique)")
   }
@@ -165,20 +162,17 @@ abstract class AbstractJsonFactory(val universe: Universe, val reporter: Reporte
   def renumber(allModels: mutable.Map[Int, JObject]): Unit = {
     println("Renumbering objects")
     val repl = allModels.keys.toSeq.sorted.zipWithIndex.toMap
-    val linkRepl = repl map { case (k, v) => (Link(k), Link(v)) }
+    val linkRepl = repl.map { case (k, v) => (Link(k), Link(v)) }
 
     def replaceIn(j: JBase): Unit = {
-      j replaceLinks linkRepl
-      j.children foreach {
-        replaceIn
-      }
+      j.replaceLinks(linkRepl)
+      j.children.foreach(replaceIn)
     }
 
-    allModels.values foreach {
-      replaceIn
-    }
-    val newM = allModels.toSeq map { case (ord, j) => (repl(ord), j) }
-    allModels.clear
+    allModels.values.foreach(replaceIn)
+
+    val newM = allModels.toSeq.map { case (ord, j) => (repl(ord), j) }
+    allModels.clear()
     allModels ++= newM
   }
 
@@ -186,11 +180,11 @@ abstract class AbstractJsonFactory(val universe: Universe, val reporter: Reporte
     val global = mutable.Set.empty[Int]
 
     def f(ord: Int): Unit = {
-      if (!(global contains ord)) {
+      if (!global.contains(ord)) {
         val j = allModels(ord)
         if (j !! "isTemplate" || j("is", "").contains('M')) {
           global += ord
-          j("members", JArray.Empty).values foreach {
+          j("members", JArray.Empty).values.foreach {
             case Link(target) => f(target)
             case _ =>
           }
@@ -205,10 +199,10 @@ abstract class AbstractJsonFactory(val universe: Universe, val reporter: Reporte
   def inline(allModels: mutable.Map[Int, JObject]): Unit = {
     println("Finding objects to inline")
     val keep = findGlobal(allModels)
-    allModels.values foreach {
-      _ foreachRec {
+    allModels.values.foreach {
+      _.foreachRec {
         case j: JObject =>
-          j("_links", JArray.Empty).values foreach {
+          j("_links", JArray.Empty).values.foreach {
             keep += _.asInstanceOf[Link].target
           }
         case _ =>
@@ -216,29 +210,25 @@ abstract class AbstractJsonFactory(val universe: Universe, val reporter: Reporte
     }
     println(s"Protecting ${keep.size} objects")
     val counts = mutable.Map.empty[Int, Int]
-    allModels.values foreach {
-      _ foreachRec {
-        _.links foreach { l =>
+    allModels.values.foreach {
+      _.foreachRec {
+        _.links.foreach { l =>
           counts += l.target -> (counts.getOrElse(l.target, 0) + 1)
         }
       }
     }
-    val toInline = counts.filter({ case (_, c) => c <= 1 }).keys.toSet -- keep
+    val toInline = counts.filter { case (_, c) => c <= 1 } .keys.toSet -- keep
     if (toInline.nonEmpty) {
       println(s"Inlining/eliminating ${toInline.size} objects")
       val repl = toInline.map { i => (Link(i), allModels(i)) }.toMap
       allModels --= toInline
 
       def replaceIn(j: JBase): Unit = {
-        j replaceLinks repl
-        j.children foreach {
-          replaceIn
-        }
+        j.replaceLinks(repl)
+        j.children.foreach(replaceIn)
       }
 
-      allModels.values foreach {
-        replaceIn
-      }
+      allModels.values.foreach(replaceIn)
     }
   }
 
@@ -263,7 +253,7 @@ abstract class AbstractJsonFactory(val universe: Universe, val reporter: Reporte
   }
 
   def nameFor(j: JObject): Option[String] =
-    (j("name") orElse {
-      j("qName") map { q => qNameToName(q.asInstanceOf[String]) }
-    }).asInstanceOf[Option[String]]
+    j("name").orElse {
+      j("qName").map { q => qNameToName(q.asInstanceOf[String]) }
+    }.asInstanceOf[Option[String]]
 }

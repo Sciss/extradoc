@@ -2,12 +2,12 @@ package com.novocode.extradoc.json
 
 import com.novocode.extradoc.XmlSupport._
 
-import scala.collection._
+import scala.collection.{mutable, Map => CMap, Seq => CSeq}
 import scala.language.implicitConversions
 import scala.reflect.ClassManifest
 import scala.reflect.internal.Reporter
 import scala.tools.nsc.doc.base.{comment => cm}
-import scala.tools.nsc.doc.model._
+import scala.tools.nsc.doc.{model => m}
 import scala.xml.{Elem, Node, NodeBuffer, NodeSeq, Text, Xhtml}
 
 abstract class JsonBuilder { builder =>
@@ -28,7 +28,7 @@ abstract class JsonBuilder { builder =>
   class CollectingHtmlGen extends HtmlGen {
     val links = new JArray
 
-    def ref(e: TemplateEntity): String = {
+    def ref(e: m.TemplateEntity): String = {
       links += global(e)(createEntity)
       "#"
     }
@@ -40,12 +40,12 @@ abstract class JsonBuilder { builder =>
     val gen = new CollectingHtmlGen
     val ns = f(gen)
     val j = new JObject
-    j +?= "_links" -> gen.links
+    j.addOpt("_links" -> gen.links)
     j += "_html" -> XmlMkString(ns) // gen.mkString(ns)
     j
   }
 
-  implicit def nodeSeqFromList(in: Seq[Node]): NodeSeq = NodeSeq.fromSeq(in)
+  implicit def nodeSeqFromList(in: CSeq[Node]): NodeSeq = NodeSeq.fromSeq(in)
 
   def createBody(b: cm.Body): JObject = createHtml(_.bodyToHtml(b))
 
@@ -53,7 +53,7 @@ abstract class JsonBuilder { builder =>
 
   def createInline(i: cm.Inline): JObject = createHtml(_.inlineToHtml(i))
 
-  def createComment(c: cm.Comment): (JObject, Map[String, JObject], Map[String, JObject]) = {
+  def createComment(c: cm.Comment): (JObject, CMap[String, JObject], CMap[String, JObject]) = {
     val j             = new JObject
     val bodyDoc       = createBody(c.body)
     val bodyIsEmpty   = (bodyDoc("_html") getOrElse "") == ""
@@ -63,7 +63,7 @@ abstract class JsonBuilder { builder =>
     if (!shortIsEmpty) j += "short" -> shortDoc
 
     if (removeSimpleBodyDocs) {
-      val bodyHtml      = bodyDoc("_html").getOrElse("").asInstanceOf[String]
+      val bodyHtml      = bodyDoc ("_html").getOrElse("").asInstanceOf[String]
       val shortHtml     = shortDoc("_html").getOrElse("").asInstanceOf[String]
       val bodyIsSimple  = bodyHtml == shortHtml
 
@@ -74,30 +74,30 @@ abstract class JsonBuilder { builder =>
       j += "body" -> bodyDoc
     }
 
-    j +?= "authors" -> JArray(c.authors.map(createBody))
-    j +?= "see"     -> JArray(c.see.map(createBody))
+    j.addOpt("authors" -> JArray(c.authors.map(createBody)))
+    j.addOpt("see"     -> JArray(c.see    .map(createBody)))
 
-    c.result .foreach { b => j +?= "result" -> createBody(b) }
+    c.result.foreach { b => j addOpt "result" -> createBody(b) }
 
-    j +?= "throws"  -> JObject(c.throws.map { case (k, v) => k -> createBody(v) })
+    j.addOpt("throws"  -> JObject(c.throws.map { case (k, v) => k -> createBody(v) }))
 
     val vParams = c.valueParams .map { case (k, v) => k -> createBody(v) }
     val tParams = c.typeParams  .map { case (k, v) => k -> createBody(v) }
 
-    c.version .foreach { b => j +?= "version" -> createBody(b) }
-    c.since   .foreach { b => j +?= "since"   -> createBody(b) }
+    c.version .foreach { b => j.addOpt("version" -> createBody(b)) }
+    c.since   .foreach { b => j.addOpt("since"   -> createBody(b)) }
 
-    j +?= "todo" -> JArray(c.todo.map(createBody))
+    j.addOpt("todo" -> JArray(c.todo.map(createBody)))
 
-    c.deprecated .foreach { b => j +?= "deprecated" -> createBody(b) }
+    c.deprecated .foreach { b => j addOpt "deprecated" -> createBody(b) }
 
-    j +?= "note"    -> JArray(c.note.map(createBody))
-    j +?= "example" -> JArray(c.example.map(createBody))
+    j.addOpt("note"    -> JArray(c.note    .map(createBody)))
+    j.addOpt("example" -> JArray(c.example .map(createBody)))
 
     (j, vParams, tParams)
   }
 
-  def createTypeEntity(t: TypeEntity): JObject = {
+  def createTypeEntity(t: m.TypeEntity): JObject = {
     val j = new JObject
     if (typeEntitiesAsHtml) {
       val b     = new NodeBuffer
@@ -107,22 +107,23 @@ abstract class JsonBuilder { builder =>
       t.refEntity .foreach { case (start, (ref, len)) =>
         if (pos < start) b += Text(name.substring(pos, start))
         links += global(ref)(createEntity _)
-        b += Elem(null, "a", null, xml.TopScope, minimizeEmpty = false, child = Text(name.substring(start, start + len)))
+        b += Elem(null, "a", xml.Null, xml.TopScope, minimizeEmpty = false, 
+          child = Text(name.substring(start, start + len)))
         pos = start + len
       }
       if (pos < name.length) b += Text(name.substring(pos))
       j += "_xname" -> Xhtml.toXhtml(b)
-      j +?= "_refs" -> JArray(links)
+      j.addOpt("_refs" -> JArray(links))
     } else {
       j += "name" -> t.name
-      j +?= "refEntity" -> JArray(t.refEntity.map {
+      j.addOpt("refEntity" -> JArray(t.refEntity.map {
         case (k, v) =>
           val vv = new JObject
           vv += "s" -> k
           vv += "l" -> v._2
           vv += "e" -> global(v._1)(createEntity _)
           vv
-      })
+      }))
     }
     j
   }
@@ -131,8 +132,8 @@ abstract class JsonBuilder { builder =>
     val j = new JObject
 //    j += "inTemplate" -> global(e.inTemplate)(createEntity _)
     e match { // HH
-      case e1: Entity => j += "inTemplate" -> global(e1.inTemplate)(createEntity _)
-      case _          =>  // ignore
+      case e1: m.Entity => j += "inTemplate" -> global(e1.inTemplate)(createEntity _)
+      case _            =>  // ignore
     }
 
     // "toRoot" is own ID plus recursively toRoot of inTemplate
@@ -150,7 +151,7 @@ abstract class JsonBuilder { builder =>
     var isPackageOrClassOrTraitOrObject = false
     var isClassOrTrait = false
 
-    as[TemplateEntity](e) { t =>
+    as[m.TemplateEntity](e) { t =>
       isPackageOrClassOrTraitOrObject = t.isPackage || t.isClass || t.isTrait || t.isObject || t.isRootPackage
       isClassOrTrait = t.isClass || t.isTrait
       if (compactFlags) {
@@ -170,11 +171,11 @@ abstract class JsonBuilder { builder =>
       }
     }
     //as[NoDocTemplate](e) { t => j += "isNoDocTemplate" -> true }
-    var vParams: Map[String, JObject] = Map.empty
-    var tParams: Map[String, JObject] = Map.empty
+    var vParams: CMap[String, JObject] = CMap.empty
+    var tParams: CMap[String, JObject] = CMap.empty
 
-    as[MemberEntity](e) { m =>
-      m.comment foreach { c =>
+    as[m.MemberEntity](e) { m =>
+      m.comment.foreach { c =>
         val (comment, v, t) = createComment(c)
         j += "comment" -> comment
         vParams = v
@@ -182,10 +183,10 @@ abstract class JsonBuilder { builder =>
       }
       if (compactFlags) {
         if (m.visibility.isProtected) set(j, 'o')
-        if (m.visibility.isPublic) set(j, 'u')
+        if (m.visibility.isPublic   ) set(j, 'u')
       } else {
-        if (m.visibility.isProtected) j += "isProtected" -> true
-        if (m.visibility.isPublic) j += "isPublic" -> true
+        if (m.visibility.isProtected) j += "isProtected"  -> true
+        if (m.visibility.isPublic   ) j += "isPublic"     -> true
       }
 
       // XXX TODO: owner is `Option[Entity] in 2.12, and `Entity` in 2.13
@@ -220,27 +221,29 @@ abstract class JsonBuilder { builder =>
 //          if (j("visibleIn", Link(-1)).target != -1)
 //            j += "visibleIn" -> originalOwnerLink
 //          // inDefinitionTemplate.head has already become inTemplate
-//          j +?= "alsoIn" -> JArray(m.inDefinitionTemplates.tail.map(e => global(e)(createEntity)))
+//          j addOpt "alsoIn" -> JArray(m.inDefinitionTemplates.tail.map(e => global(e)(createEntity)))
 //        } else
         {
           // filter out inTemplate
-          j +?= "alsoIn" -> JArray(m.inDefinitionTemplates.filter(_ != m.inTemplate).map(e => global(e)(createEntity)))
+          j.addOpt("alsoIn" ->
+            JArray(m.inDefinitionTemplates.filter(_ != m.inTemplate).map(e => global(e)(createEntity)))
+          )
         }
         // definitionName is always identical to qName, so leave it out
       } else {
         // XXX TODO
-//        j +?= "inheritedFrom" -> JArray(m.inheritedFrom.map(e => global(e)(createEntity)))
-        j +?= "definitionName" -> m.definitionName
+//        j addOpt "inheritedFrom" -> JArray(m.inheritedFrom.map(e => global(e)(createEntity)))
+        j.addOpt("definitionName" -> m.definitionName)
       }
 
-      m.flags.map(createBlock) foreach { fj =>
+      m.flags.map(createBlock).foreach { fj =>
         fj("_html") match {
           case Some("<p>sealed</p>") =>
-            if (compactFlags) set(j, 's') else j += "isSealed" -> true
+            if (compactFlags) set(j, 's') else j += "isSealed"    -> true
           case Some("<p>abstract</p>") =>
-            if (compactFlags) set(j, 'B') else j += "isAbstract" -> true
+            if (compactFlags) set(j, 'B') else j += "isAbstract"  -> true
           case Some("<p>final</p>") =>
-            if (compactFlags) set(j, 'f') else j += "isFinal" -> true
+            if (compactFlags) set(j, 'f') else j += "isFinal"     -> true
           case _ =>
         }
       }
@@ -278,75 +281,75 @@ abstract class JsonBuilder { builder =>
       }
     } // as[MemberEntity](e)
 
-    as[DocTemplateEntity](e) { t =>
-      t.sourceUrl .foreach { u => j +?= "sourceUrl" -> u.toString }
-      j +?= "typeParams" -> createTypeParams(t.typeParams, tParams)
+    as[m.DocTemplateEntity](e) { t =>
+      t.sourceUrl.foreach(u => j.addOpt("sourceUrl" -> u.toString))
+      j.addOpt("typeParams" -> createTypeParams(t.typeParams, tParams))
 //      t.parentType .foreach { p => j += "parentType" -> createTypeEntity(p) }
       t.parentTypes.foreach { case (_ /*pTemp*/, pType) =>
         j += "parentType" -> createTypeEntity(pType)  // XXX TODO correct?
       }
 
       // "parentTemplates" is not needed and has been removed in Scala trunk (2.9)
-      //j +?= "parentTemplates" -> JArray(t.parentTemplates.map(e => global(e)(createEntity _)))
+      //j addOpt "parentTemplates" -> JArray(t.parentTemplates.map(e => global(e)(createEntity _)))
 
-//      j +?= "linearization" -> JArray(t.linearization .map(e => global(e)(createEntity)))
-      j +?= "linearization" -> JArray(t.linearizationTypes .map(e => global(e)(createEntity)))  // XXX  TODO correct?
+//      j addOpt "linearization" -> JArray(t.linearization .map(e => global(e)(createEntity)))
+      j.addOpt("linearization" -> JArray(t.linearizationTypes .map(e => global(e)(createEntity))))  // XXX  TODO correct?
 
-//      j +?= "subClasses"    -> JArray(t.subClasses    .map(e => global(e)(createEntity)))
+//      j addOpt "subClasses"    -> JArray(t.subClasses    .map(e => global(e)(createEntity)))
       // HH
-      j +?= "subClasses"    -> JArray(t.directSubClasses.map(e => global(e)(createEntity)))
+      j.addOpt("subClasses"    -> JArray(t.directSubClasses.map(e => global(e)(createEntity))))
 
       // "members" is constructors + templates + methods + values + abstractTypes + aliasTypes + packages
-      j +?= "members" -> JArray(t.members.map(e => global(e)(createEntity)))
+      j.addOpt("members" -> JArray(t.members.map(e => global(e)(createEntity))))
 
-      //j +?= "templates" -> JArray(t.templates.map(e => global(e)(createEntity _)))
-      //j +?= "methods" -> JArray(t.methods.map(e => global(e)(createEntity _)))
-      //j +?= "values" -> JArray(t.values.map(e => global(e)(createEntity _)))
-      //j +?= "abstractTypes" -> JArray(t.abstractTypes.map(e => global(e)(createEntity _)))
-      //j +?= "aliasTypes" -> JArray(t.aliasTypes.map(e => global(e)(createEntity _)))
+      //j addOpt "templates" -> JArray(t.templates.map(e => global(e)(createEntity _)))
+      //j addOpt "methods" -> JArray(t.methods.map(e => global(e)(createEntity _)))
+      //j addOpt "values" -> JArray(t.values.map(e => global(e)(createEntity _)))
+      //j addOpt "abstractTypes" -> JArray(t.abstractTypes.map(e => global(e)(createEntity _)))
+      //j addOpt "aliasTypes" -> JArray(t.aliasTypes.map(e => global(e)(createEntity _)))
 
       t.companion .foreach { p => j += "companion" -> global(p)(createEntity) }
     }
 
-    as[Trait](e) { t =>
-      j +?= "valueParams" -> createValueParams(t.valueParams, vParams)
+    as[m.Trait](e) { t =>
+      j.addOpt("valueParams" -> createValueParams(t.valueParams, vParams))
     }
 
-    as[Class](e) { c =>
-      //j +?= "constructors" -> JArray(c.constructors.map(e => global(e)(createEntity _)))
+    as[m.Class](e) { c =>
+      //j addOpt "constructors" -> JArray(c.constructors.map(e => global(e)(createEntity _)))
       if (c.isCaseClass) {
         if (compactFlags) set(j, 'C')
         else j += "isCaseClass" -> true
       }
     }
 
-    //as[Package](e) { p => j +?= "packages" -> JArray(p.packages.map(e => global(e)(createEntity _))) }
-    as[NonTemplateMemberEntity](e) { n =>
+    //as[Package](e) { p => j addOpt "packages" -> JArray(p.packages.map(e => global(e)(createEntity _))) }
+    as[m.NonTemplateMemberEntity](e) { n =>
       if (n.isUseCase) {
         if (compactFlags) set(j, 'U')
         else j += "isUseCase" -> true
       }
     }
 
-    as[Def](e) { d =>
-      j +?= "typeParams" -> createTypeParams(d.typeParams, tParams)
-      j +?= "valueParams" -> createValueParams(d.valueParams, vParams)
+    as[m.Def](e) { d =>
+      j.addOpt("typeParams"   -> createTypeParams (d.typeParams , tParams))
+      j.addOpt("valueParams"  -> createValueParams(d.valueParams, vParams))
     }
 
-    as[Constructor](e) { c =>
+    as[m.Constructor](e) { c =>
       if (c.isPrimary) {
         if (compactFlags) set(j, 'P')
         else j += "isPrimary" -> true
       }
-      j +?= "valueParams" -> createValueParams(c.valueParams, vParams)
+      j.addOpt("valueParams" -> createValueParams(c.valueParams, vParams))
     }
 
-    as[AbstractType](e) { a =>
-      a.lo foreach { t => j +?= "lo" -> createTypeEntity(t) }
-      a.hi foreach { t => j +?= "hi" -> createTypeEntity(t) }
+    as[m.AbstractType](e) { a =>
+      a.lo.foreach { t => j.addOpt("lo" -> createTypeEntity(t)) }
+      a.hi.foreach { t => j.addOpt("hi" -> createTypeEntity(t)) }
     }
 
-    as[AliasType](e) { a => j += "alias" -> createTypeEntity(a.alias) }
+    as[m.AliasType](e) { a => j += "alias" -> createTypeEntity(a.alias) }
 
 //    as[ParameterEntity](e) { p =>
 //      if (!compactFlags) {
@@ -357,26 +360,26 @@ abstract class JsonBuilder { builder =>
 //      j -= "inTemplate"
 //    }
 
-    as[ParameterEntity](e) { p =>
+    as[m.ParameterEntity](e) { p =>
       if (!compactFlags) {
         // These two are not represented with compact flags
-        as[TypeParam](p) { _ =>
+        as[m.TypeParam](p) { _ =>
           j += "isTypeParam" -> true
         }
-        as[ValueParam](p) { _ =>
+        as[m.ValueParam](p) { _ =>
           j += "isValueParam" -> true
         }
       }
       j -= "inTemplate"
     }
 
-    as[TypeParam](e) { t =>
-      j +?= "variance" -> t.variance
-      t.lo foreach { t => j +?= "lo" -> createTypeEntity(t) }
-      t.hi foreach { t => j +?= "hi" -> createTypeEntity(t) }
+    as[m.TypeParam](e) { t =>
+      j.addOpt("variance" -> t.variance)
+      t.lo.foreach { t => j.addOpt("lo" -> createTypeEntity(t)) }
+      t.hi.foreach { t => j.addOpt("hi" -> createTypeEntity(t)) }
     }
 
-    as[ValueParam](e) { v =>
+    as[m.ValueParam](e) { v =>
       j += "resultType" -> createTypeEntity(v.resultType)
 
       // XXX TODO : look at the tree `s`
@@ -396,7 +399,7 @@ abstract class JsonBuilder { builder =>
     j
   }
 
-  def createValueParams(vp: List[List[ValueParam]], docs: Map[String, JObject]): JArray = {
+  def createValueParams(vp: List[List[m.ValueParam]], docs: CMap[String, JObject]): JArray = {
     JArray(vp.map(l => JArray(l.map(e => global(e) { e =>
       val j = createEntity(e)
       docs.get(e.name).foreach { doc => j += "doc" -> doc }
@@ -404,7 +407,7 @@ abstract class JsonBuilder { builder =>
     }))))
   }
 
-  def createTypeParams(tp: List[TypeParam], docs: Map[String, JObject]): JArray = {
+  def createTypeParams(tp: List[m.TypeParam], docs: CMap[String, JObject]): JArray = {
     JArray(tp.map(e => global(e) { e =>
       val j = createEntity(e)
       docs.get(e.name).foreach { doc => j += "doc" -> doc }

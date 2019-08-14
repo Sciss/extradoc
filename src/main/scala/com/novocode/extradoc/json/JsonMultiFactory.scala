@@ -1,10 +1,10 @@
 package com.novocode.extradoc.json
 
-import scala.collection._
-import scala.tools.nsc.doc._
+import scala.collection.{mutable, Map => CMap}
+import scala.tools.nsc.doc
 import scala.tools.nsc.reporters.Reporter
 
-class JsonMultiFactory(universe: Universe, reporter: Reporter, explorer: Boolean)
+class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boolean)
   extends AbstractJsonFactory(universe, reporter) {
 
   // Global inlining is harmful for multi-page output because it increases
@@ -20,7 +20,7 @@ class JsonMultiFactory(universe: Universe, reporter: Reporter, explorer: Boolean
     val objects   : mutable.Set   [Int] = mutable.Set   .empty
     val renumbered: mutable.Buffer[Int] = mutable.Buffer.empty
 
-    lazy val renumberedMap: Map[Int, Int] =
+    lazy val renumberedMap: CMap[Int, Int] =
       renumbered.zipWithIndex.toMap // don't access until "renumbered" is stable
   }
 
@@ -260,7 +260,7 @@ class JsonMultiFactory(universe: Universe, reporter: Reporter, explorer: Boolean
         val sortedChildren = tlChildren sortBy { case (_, j: JObject, kind) =>
           (j("qName", "").toLowerCase, kind)
         }
-        jo +?= "e" -> JArray(sortedChildren map { case (ord, chj, kind) =>
+        jo addOpt "e" -> JArray(sortedChildren map { case (ord, chj, kind) =>
           val ch = new JObject
           ch += "p" -> pages(ord).no
           ch += "k" -> kind.toString

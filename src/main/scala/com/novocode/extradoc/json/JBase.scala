@@ -2,7 +2,7 @@ package com.novocode.extradoc.json
 
 import java.io.{StringWriter, Writer}
 
-import scala.collection._
+import scala.collection.{mutable, Iterable => CIterable, Iterator => CIterator, Traversable => CTraversable, Map => CMap}
 import scala.reflect.ClassManifest
 
 abstract class CanBeValue[-T] {
@@ -34,7 +34,7 @@ object CanBeValue {
     def isEmpty(v: Boolean): Boolean = !v
 
     def writeValue(v: Boolean, out: Writer, resolveLink: Link => Any): Unit =
-      out write v.toString
+      out.write(v.toString)
   }
   implicit val linkCanBeValue: CanBeValue[Link] = new CanBeValue[Link] {
     def isEmpty(v: Link) = false
@@ -59,44 +59,40 @@ sealed abstract class JBase {
 
   def isEmpty: Boolean
 
-  def links: Iterable[Link]
+  def links: CIterable[Link]
 
-  def children: Iterable[JBase]
+  def children: CIterable[JBase]
 
-  def replaceLinks[T: CanBeValue](repl: Map[Link, T]): Unit
+  def replaceLinks[T: CanBeValue](repl: CMap[Link, T]): Unit
 
   def foreachRec(f: JBase => Unit): Unit = {
     f(this)
-    children foreach {
-      _.foreachRec(f)
-    }
+    children.foreach(_.foreachRec(f))
   }
 
   override def toString: String = {
     val wr = new StringWriter
-    writeTo(wr, {
-      _.target
-    })
+    writeTo(wr, _.target)
     wr.toString
   }
 }
 
 object JBase {
   def quote(s: String, wr: Writer): Unit = {
-    wr write '"'
+    wr.write('"')
     val len = s.length
     var i = 0
     while (i < len) {
       val c = s.charAt(i)
-      if (c == '"') wr write "\\\""
-      else if (c == '\\') wr write "\\\\"
-      else if (c == '\r') wr write "\\r"
-      else if (c == '\n') wr write "\\n"
-      else if (c >= 32 && c <= 127) wr write c
+      if      (c == '"' ) wr.write("\\\"")
+      else if (c == '\\') wr.write("\\\\")
+      else if (c == '\r') wr.write("\\r")
+      else if (c == '\n') wr.write("\\n")
+      else if (c >= 32 && c <= 127) wr.write(c)
       else wr.write(s"\\u${"%04X".format(c.toInt)}")
       i += 1
     }
-    wr write '"'
+    wr.write('"')
   }
 }
 
@@ -108,23 +104,24 @@ sealed class JObject extends JBase {
     m += t
   }
 
-  def +?=[V](t: (String, V))(implicit cv: CanBeValue[V]): Unit =
+  /** Adds an entry optionally, if the value is non-empty */
+  def addOpt[V](t: (String, V))(implicit cv: CanBeValue[V]): Unit =
     if (!cv.isEmpty(t._2)) this += t
 
-  def -=(k: String): Option[Any] = m remove k
+  def -= (k: String): Option[Any] = m.remove(k)
 
   def isEmpty: Boolean = m.isEmpty
 
   def writeTo(out: Writer, resolveLink: Link => Any): Unit = {
-    out write '{'
+    out.write('{')
     var first = true
     for ((k, v) <- m) {
       if (first) first = false else out write ','
       JBase.quote(k, out)
-      out write ':'
+      out.write(':')
       CanBeValue.recoverFor(v).writeValue(v, out, resolveLink)
     }
-    out write '}'
+    out.write('}')
   }
 
   override def equals(o: Any): Boolean = o match {
@@ -134,27 +131,27 @@ sealed class JObject extends JBase {
 
   override def hashCode: Int = m.hashCode
 
-  def links: Iterable[Link] = m.values.filter(_.isInstanceOf[Link]).asInstanceOf[Iterable[Link]]
+  def links: CIterable[Link] = m.values.filter(_.isInstanceOf[Link]).asInstanceOf[CIterable[Link]]
 
-  def children: Iterable[JBase] = m.values.filter(_.isInstanceOf[JBase]).asInstanceOf[Iterable[JBase]]
+  def children: CIterable[JBase] = m.values.filter(_.isInstanceOf[JBase]).asInstanceOf[CIterable[JBase]]
 
-  def replaceLinks[T: CanBeValue](repl: Map[Link, T]): Unit = m transform { case (_ /*k*/, v) =>
+  def replaceLinks[T: CanBeValue](repl: CMap[Link, T]): Unit = m transform { case (_ /*k*/, v) =>
     v match {
       case l: Link => repl.getOrElse(l, l)
       case _ => v
     }
   }
 
-  def apply(key: String): Option[Any] = m get key
+  def apply(key: String): Option[Any] = m.get(key)
 
-  def apply[T: ClassManifest](key: String, default: T): T = m get key match {
+  def apply[T: ClassManifest](key: String, default: T): T = m.get(key) match {
     case Some(v) if implicitly[ClassManifest[T]].erasure.isInstance(v) => v.asInstanceOf[T]
     case _ => default
   }
 
-  def keys: Iterator[String] = m.keys.iterator
+  def keys: CIterator[String] = m.keys.iterator
 
-  def !!(k: String): Boolean = m get k match {
+  def !!(k: String): Boolean = m.get(k) match {
     case None | Some("") | Some(0) | Some(false) => false
     case _ => true
   }
@@ -163,7 +160,7 @@ sealed class JObject extends JBase {
 object JObject {
   def apply: JObject = new JObject
 
-  def apply[V: CanBeValue](t: Traversable[(String, V)]): JObject = {
+  def apply[V: CanBeValue](t: CTraversable[(String, V)]): JObject = {
     val o = new JObject
     t foreach { case (k, v) => o += k -> v }
     o
@@ -178,9 +175,9 @@ object JObject {
 sealed class JArray extends JBase {
   private val a = mutable.Buffer.empty[Any]
 
-  def +=[T](v: T)(implicit cv: CanBeValue[T]): Unit = a += v
+  def += [T](v: T)(implicit cv: CanBeValue[T]): Unit = a += v
 
-  def +?=[T](v: T)(implicit cv: CanBeValue[T]): Unit = if (!cv.isEmpty(v)) a += v
+  def addOpt[T](v: T)(implicit cv: CanBeValue[T]): Unit = if (!cv.isEmpty(v)) a += v
 
   def isEmpty: Boolean = a.isEmpty
 
@@ -201,25 +198,23 @@ sealed class JArray extends JBase {
 
   override def hashCode: Int = a.hashCode
 
-  def links: Iterable[Link] = a.filter(_.isInstanceOf[Link]).asInstanceOf[Iterable[Link]]
+  def links: CIterable[Link] = a.filter(_.isInstanceOf[Link]).asInstanceOf[CIterable[Link]]
 
-  def children: Iterable[JBase] = a.filter(_.isInstanceOf[JBase]).asInstanceOf[Iterable[JBase]]
+  def children: CIterable[JBase] = a.filter(_.isInstanceOf[JBase]).asInstanceOf[CIterable[JBase]]
 
-  def replaceLinks[T: CanBeValue](repl: Map[Link, T]): Unit = {
+  def replaceLinks[T: CanBeValue](repl: CMap[Link, T]): Unit = {
     val len = a.length
     var i = 0
     while (i < len) {
       a(i) match {
-        case l: Link => repl get l foreach {
-          a(i) = _
-        }
-        case _ =>
+        case l: Link  => repl.get(l).foreach(a(i) = _)
+        case _        =>
       }
       i += 1
     }
   }
 
-  def values: Iterator[Any] = a.iterator
+  def values: CIterator[Any] = a.iterator
 
   def length: Int = a.length
 
@@ -235,14 +230,14 @@ sealed class JArray extends JBase {
 object JArray {
   def apply: JArray = new JArray
 
-  def apply[T: CanBeValue](t: Traversable[T]): JArray = {
+  def apply[T: CanBeValue](t: CTraversable[T]): JArray = {
     val a = new JArray
     t foreach { j => a += j }
     a
   }
 
   val Empty: JArray = new JArray {
-    override def +=[T](v: T)(implicit cv: CanBeValue[T]): Unit =
+    override def += [T](v: T)(implicit cv: CanBeValue[T]): Unit =
       throw new RuntimeException("Cannot add to JArray.Empty")
   }
 }
@@ -264,10 +259,12 @@ case class LimitedEquality(j: JBase, keys: String*) {
 object LimitedEquality {
   def isEqual(a: Any, b: Any, keys: String*): Boolean = (a, b) match {
     case (null, null) => true
-    case (null, _) => false
-    case (_, null) => false
+    case (null, _)    => false
+    case (_, null)    => false
+
     case (a: JArray, b: JArray) =>
-      a.length == b.length && (a.values zip b.values forall { case (v, w) => isEqual(v, w, keys: _*) })
+      a.length == b.length && (a.values zip b.values).forall { case (v, w) => isEqual(v, w, keys: _*) }
+
     case (a: JObject, b: JObject) =>
       keys forall { k =>
         (a(k), b(k)) match {
@@ -277,10 +274,12 @@ object LimitedEquality {
           case (Some(v), Some(w)) => isEqual(v, w, keys: _*)
         }
       }
-    case (a: String, b: String) => a == b
-    case (a: Int, b: Int) => a == b
+
+    case (a: String , b: String ) => a == b
+    case (a: Int    , b: Int    ) => a == b
     case (a: Boolean, b: Boolean) => a == b
-    case (Link(a), Link(b)) => a == b
+    case (Link(a)   , Link(b)   ) => a == b
+
     case _ => false
   }
 }

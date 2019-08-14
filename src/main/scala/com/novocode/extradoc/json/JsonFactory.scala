@@ -1,9 +1,9 @@
 package com.novocode.extradoc.json
 
-import scala.tools.nsc.doc._
+import scala.tools.nsc.doc
 import scala.tools.nsc.reporters.Reporter
 
-class JsonFactory(universe: Universe, reporter: Reporter)
+class JsonFactory(universe: doc.Universe, reporter: Reporter)
   extends AbstractJsonFactory(universe, reporter) {
 
   def generate(): Unit = {

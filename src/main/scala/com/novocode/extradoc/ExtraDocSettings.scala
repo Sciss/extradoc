@@ -1,6 +1,6 @@
 package com.novocode.extradoc
 
-import scala.tools.nsc._
+import scala.tools.nsc.doc
 
 class ExtraDocSettings(error: String => Unit) extends doc.Settings(error) {
 

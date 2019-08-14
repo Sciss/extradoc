@@ -1,6 +1,6 @@
 package com.novocode.extradoc.json
 
-import scala.tools.nsc.doc.model._
+import scala.tools.nsc.doc.model.NoDocTemplate
 
 final case class EntityHash[+E <: AnyRef /*Entity*/](e: E) extends Function0[E] {
 

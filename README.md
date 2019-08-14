@@ -1,10 +1,9 @@
 # Extradoc
 
 A variant of the scala-doc documentation tool that can output JSON format.
-Original code 
-
-Note: when using Scala 2.13, HTML output is currently not yet working (impedance mismatch between scala.xml
-and home baked XML replacement in scala-doc).
+Original code for Scala 2.8 by [Stefan Zeiger](https://github.com/szeiger/extradoc),
+updated for Scala 2.12 and 2.13 by Hanns Holger Rutz. Note: not all problems in the
+migration have been fixed yet, this is experimental. License is BSD 2-clause.
 
 Below is the original read-me.
 

@@ -3,9 +3,8 @@
 
 package com.novocode.extradoc
 
-import scala.tools.nsc
-import scala.tools.nsc._
-import scala.tools.nsc.doc._
+import scala.tools.nsc.doc
+import scala.tools.nsc.doc.{model => m}
 import scala.tools.nsc.reporters.Reporter
 
 /** A documentation processor controls the process of generating Scala documentation, which is as follows.
@@ -31,7 +30,7 @@ class DocFactory(val reporter: Reporter, val settings: doc.Settings) { processor
   /** The unique compiler instance used by this processor and constructed from its `settings`. */
   // HH
 //  object compiler extends Global(settings, reporter)
-  object compiler extends ScaladocGlobal(settings, reporter)
+  object compiler extends doc.ScaladocGlobal(settings, reporter)
 //  object compiler extends nsc.interactive.Global(settings, reporter)
   {
 
@@ -64,7 +63,7 @@ class DocFactory(val reporter: Reporter, val settings: doc.Settings) { processor
     compiler.addSourceless
     if (!reporter.hasErrors) {
       val modelFactory =
-        new model.ModelFactory(compiler, settings)
+        new m.ModelFactory(compiler, settings)
           with scala.tools.nsc.doc.model.ModelFactoryImplicitSupport
           with scala.tools.nsc.doc.model.ModelFactoryTypeSupport
           with scala.tools.nsc.doc.model.diagram.DiagramFactory
@@ -75,7 +74,7 @@ class DocFactory(val reporter: Reporter, val settings: doc.Settings) { processor
       val docModel = modelFactory.makeModel.getOrElse(throw new IllegalStateException("docModel is empty")) // HH
       println(s"model contains ${modelFactory.templatesCount} documentable templates")
       settings.docformat.value match {
-        case "html"       => new html.HtmlFactory      (docModel, reporter)                   .generate()
+        case "html"       => new doc.html.HtmlFactory  (docModel, reporter)                   .generate()
         case "json"       => new json.JsonFactory      (docModel, reporter)                   .generate()
         case "json-multi" => new json.JsonMultiFactory (docModel, reporter, explorer = false) .generate()
         case "explorer"   => new json.JsonMultiFactory (docModel, reporter, explorer = true ) .generate()
