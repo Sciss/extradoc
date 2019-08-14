@@ -45,11 +45,11 @@ object CanBeValue {
   }
 
   def recoverFor(v: Any): CanBeValue[Any] = v match {
-    case _: JBase => jBaseCanBeValue.asInstanceOf[CanBeValue[Any]]
-    case _: Int => intCanBeValue.asInstanceOf[CanBeValue[Any]]
-    case _: String => stringCanBeValue.asInstanceOf[CanBeValue[Any]]
+    case _: JBase   => jBaseCanBeValue  .asInstanceOf[CanBeValue[Any]]
+    case _: Int     => intCanBeValue    .asInstanceOf[CanBeValue[Any]]
+    case _: String  => stringCanBeValue .asInstanceOf[CanBeValue[Any]]
     case _: Boolean => booleanCanBeValue.asInstanceOf[CanBeValue[Any]]
-    case _: Link => linkCanBeValue.asInstanceOf[CanBeValue[Any]]
+    case _: Link    => linkCanBeValue   .asInstanceOf[CanBeValue[Any]]
   }
 }
 
@@ -100,7 +100,7 @@ object JBase {
 }
 
 sealed class JObject extends JBase {
-  private val m = new mutable.HashMap[String, Any]
+  private val m = mutable.Map.empty[String, Any]
 
   def +=[V](t: (String, V))(implicit cv: CanBeValue[V]): Unit = {
     //if(m contains t._1) throw new RuntimeException("Cannot overwrite field "+t._1)
@@ -175,7 +175,7 @@ object JObject {
 }
 
 sealed class JArray extends JBase {
-  private val a = new mutable.ArrayBuffer[Any]
+  private val a = mutable.Buffer.empty[Any]
 
   def +=[T](v: T)(implicit cv: CanBeValue[T]): Unit = a += v
 

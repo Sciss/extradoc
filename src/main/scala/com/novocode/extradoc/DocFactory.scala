@@ -3,6 +3,7 @@
 
 package com.novocode.extradoc
 
+import scala.tools.nsc
 import scala.tools.nsc._
 import scala.tools.nsc.doc._
 import scala.tools.nsc.reporters.Reporter
@@ -28,7 +29,10 @@ import scala.tools.nsc.reporters.Reporter
 class DocFactory(val reporter: Reporter, val settings: doc.Settings) { processor =>
 
   /** The unique compiler instance used by this processor and constructed from its `settings`. */
-  object compiler extends Global(settings, reporter) {
+  // HH
+//  object compiler extends Global(settings, reporter)
+  object compiler extends nsc.interactive.Global(settings, reporter)
+  {
     override protected def computeInternalPhases(): Unit = {
       phasesSet += syntaxAnalyzer
       phasesSet += analyzer.namerFactory
@@ -38,7 +42,8 @@ class DocFactory(val reporter: Reporter, val settings: doc.Settings) { processor
       phasesSet += pickler
       phasesSet += refChecks
     }
-    override def onlyPresentation = true
+
+//    override def onlyPresentation = true
 
     lazy val addSourceless: Unit = {
       // XXX TODO
@@ -56,14 +61,22 @@ class DocFactory(val reporter: Reporter, val settings: doc.Settings) { processor
     new compiler.Run().compile(files)
     compiler.addSourceless
     if (!reporter.hasErrors) {
-      val modelFactory = (new model.ModelFactory(compiler, settings) with model./*comment.*/CommentFactory)
+      val modelFactory =
+        new model.ModelFactory(compiler, settings)
+          with scala.tools.nsc.doc.model.ModelFactoryImplicitSupport
+          with scala.tools.nsc.doc.model.ModelFactoryTypeSupport
+          with scala.tools.nsc.doc.model.diagram.DiagramFactory
+          with scala.tools.nsc.doc.model.CommentFactory
+          with scala.tools.nsc.doc.model.TreeFactory
+          with scala.tools.nsc.doc.model.MemberLookup
+
       val docModel = modelFactory.makeModel.getOrElse(throw new IllegalStateException("docModel is empty")) // HH
       println(s"model contains ${modelFactory.templatesCount} documentable templates")
       settings.docformat.value match {
-        case "html"       => (new html.HtmlFactory      (docModel)) generate docModel
-        case "json"       => (new json.JsonFactory      (docModel)) generate docModel
-        case "json-multi" => (new json.JsonMultiFactory (docModel)) generate docModel
-        case "explorer"   => (new json.JsonMultiFactory (docModel, explorer = true)) generate docModel
+        case "html"       => new html.HtmlFactory      (docModel, reporter)                   .generate()
+        case "json"       => new json.JsonFactory      (docModel, reporter)                   .generate()
+        case "json-multi" => new json.JsonMultiFactory (docModel, reporter, explorer = false) .generate()
+        case "explorer"   => new json.JsonMultiFactory (docModel, reporter, explorer = true ) .generate()
 	    }
     }
   }

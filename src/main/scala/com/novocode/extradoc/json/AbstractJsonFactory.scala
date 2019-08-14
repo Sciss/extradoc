@@ -4,10 +4,10 @@ import java.io.{InputStream, File => JFile}
 
 import scala.collection._
 import scala.tools.nsc.doc._
-import scala.tools.nsc.doc.model._
 import scala.tools.nsc.io.{Directory, Streamable}
+import scala.tools.nsc.reporters.Reporter
 
-abstract class AbstractJsonFactory(val universe: Universe) {
+abstract class AbstractJsonFactory(val universe: Universe, val reporter: Reporter) {
   self =>
 
   val doInline              = true
@@ -18,51 +18,66 @@ abstract class AbstractJsonFactory(val universe: Universe) {
 
   def prepareModel(universe: Universe): mutable.Map[Int, JObject] = {
     println("Building JSON model")
+
     val (allModels, allModelsReverse) = buildModels(universe)
+
     if (simpleParamsAsString) inlineSimpleParams(allModels, allModelsReverse)
-    while (allModels.size > allModelsReverse.size) compact(allModels, allModelsReverse)
+
+    while (allModels.size > allModelsReverse.size) {
+      compact(allModels, allModelsReverse)
+    }
+
     if (doInline) inline(allModels)
-    if (allModels.keys.max + 1 != allModels.size) renumber(allModels)
-    if (allModels.keys.max + 1 != allModels.size)
-      throw new RuntimeException(s"Renumbering failed: Max key ${allModels.keys.max} for size ${allModels.size}")
+
+    if (allModels.keys.max + 1 != allModels.size) {
+      renumber(allModels)
+      if (allModels.keys.max + 1 != allModels.size) {
+        throw new RuntimeException(s"Renumbering failed: Max key ${allModels.keys.max} for size ${allModels.size}")
+      }
+    }
+
     val (verOk, _) = verify(allModels)
     if (!verOk) throw new RuntimeException("Model verification failed")
+
     allModels
   }
 
   def buildModels(universe: Universe): (mutable.Map[Int, JObject], mutable.Map[JObject, Int]) = {
-    val globalEntityOrdinals = new mutable.HashMap[EntityHash[Entity], Int]
-    val allModels = new mutable.HashMap[Int, JObject]
-    val allModelsReverse = new mutable.HashMap[JObject, Int]
-    val builder = new JsonBuilder[Link] {
-      val typeEntitiesAsHtml: Boolean = self.typeEntitiesAsHtml
-      val compactFlags: Boolean = self.compactFlags
+    val globalEntityOrdinals  = mutable.Map.empty[EntityHash[AnyRef /*Entity*/], Int]
+    val allModels             = mutable.Map.empty[Int, JObject]
+    val allModelsReverse      = mutable.Map.empty[JObject, Int]
+    val builder: JsonBuilder  = new JsonBuilder {
+      val typeEntitiesAsHtml  : Boolean = self.typeEntitiesAsHtml
+      val compactFlags        : Boolean = self.compactFlags
       val removeSimpleBodyDocs: Boolean = self.removeSimpleBodyDocs
 
-      def global[T <: Entity](e: T)(f: T => JObject): Link = globalEntityOrdinals.get(EntityHash(e)) match {
-        case Some(ord) => Link(ord)
-        case None =>
-          val ord = globalEntityOrdinals.size
-          globalEntityOrdinals += EntityHash(e) -> ord
-          val o = f(e)
-          if (ord + 1 == globalEntityOrdinals.size) {
-            // No dependent entities were built by f, so there cannot be any references to ord yet
-            allModels += ord -> o
-            allModelsReverse get o match {
-              case Some(oldOrd) =>
-                globalEntityOrdinals remove EntityHash(e)
-                Link(oldOrd)
-              case None =>
-                allModels += ord -> o
-                allModelsReverse += o -> ord
-                Link(ord)
+      val reporter: Reporter  = self.reporter
+
+      def global[E <: AnyRef](e: E)(f: E => JObject)(implicit view: EntityView[E]): Link =
+        globalEntityOrdinals.get(EntityHash(e)) match {
+          case Some(ord) => Link(ord)
+          case None =>
+            val ord = globalEntityOrdinals.size
+            globalEntityOrdinals += EntityHash(e) -> ord
+            val o = f(e)
+            if (ord + 1 == globalEntityOrdinals.size) {
+              // No dependent entities were built by f, so there cannot be any references to ord yet
+              allModels += ord -> o
+              allModelsReverse get o match {
+                case Some(oldOrd) =>
+                  globalEntityOrdinals remove EntityHash(e)
+                  Link(oldOrd)
+                case None =>
+                  allModels += ord -> o
+                  allModelsReverse += o -> ord
+                  Link(ord)
+              }
+            } else {
+              allModels += ord -> o
+              allModelsReverse += o -> ord
+              Link(ord)
             }
-          } else {
-            allModels += ord -> o
-            allModelsReverse += o -> ord
-            Link(ord)
-          }
-      }
+        }
     }
     builder.global(universe.rootPackage)(builder.createEntity)
     println(s"Built ${allModels.size} global objects (${allModelsReverse.size} unique)")
@@ -73,7 +88,7 @@ abstract class AbstractJsonFactory(val universe: Universe) {
     println("Verifying JSON model")
     var ok = true
     var count = 0
-    val verified = new mutable.HashSet[Int]
+    val verified = mutable.Set.empty[Int]
 
     def f(ord: Int, j: JBase): Unit = {
       if (ord == -1 || !(verified contains ord)) {
@@ -168,7 +183,7 @@ abstract class AbstractJsonFactory(val universe: Universe) {
   }
 
   def findGlobal(allModels: mutable.Map[Int, JObject]): mutable.Set[Int] = {
-    val global = new mutable.HashSet[Int]
+    val global = mutable.Set.empty[Int]
 
     def f(ord: Int): Unit = {
       if (!(global contains ord)) {
@@ -200,7 +215,7 @@ abstract class AbstractJsonFactory(val universe: Universe) {
       }
     }
     println(s"Protecting ${keep.size} objects")
-    val counts = new mutable.HashMap[Int, Int]
+    val counts = mutable.Map.empty[Int, Int]
     allModels.values foreach {
       _ foreachRec {
         _.links foreach { l =>

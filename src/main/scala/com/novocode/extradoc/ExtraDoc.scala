@@ -4,10 +4,10 @@ package com.novocode.extradoc
 
 import java.io.File
 
-import scala.collection.mutable.ArrayBuffer
-import scala.tools.nsc._
+import scala.collection.mutable
+import scala.reflect.internal.util.FakePos
 import scala.tools.nsc.reporters.ConsoleReporter
-import scala.tools.nsc.util.FakePos
+import scala.tools.nsc.{CompilerCommand, FatalError, Properties}
 
 /** The main class for scaladoc, a front-end for the Scala compiler 
  *  that generates documentation from source files.
@@ -20,7 +20,7 @@ object ExtraDoc {
   var reporter: ConsoleReporter = _
   
   def scalaFiles(base: File, name: String): Seq[String] = {
-    val b = new ArrayBuffer[String]
+    val b = mutable.Buffer.empty[String]
     def collect(f: File, s: String): Unit = {
       //println(s"Scanning ${f.getPath}")
       val fn = f.getName

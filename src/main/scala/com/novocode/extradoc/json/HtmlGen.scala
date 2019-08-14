@@ -10,7 +10,7 @@ abstract class HtmlGen extends html.HtmlPage {
   protected def title: String = ""
 
   protected def headers : NodeSeq = NodeSeq.Empty
-  protected def body    : NodeSeq = NodeSeq.Empty
+  def           body    : NodeSeq = NodeSeq.Empty
 
   def ref(e: TemplateEntity): String
 

@@ -2,8 +2,10 @@ package com.novocode.extradoc.json
 
 import scala.collection._
 import scala.tools.nsc.doc._
+import scala.tools.nsc.reporters.Reporter
 
-class JsonMultiFactory(universe: Universe, explorer: Boolean = false) extends AbstractJsonFactory(universe) {
+class JsonMultiFactory(universe: Universe, reporter: Reporter, explorer: Boolean)
+  extends AbstractJsonFactory(universe, reporter) {
 
   // Global inlining is harmful for multi-page output because it increases
   // the size of extra objects which are included in many pages
@@ -15,14 +17,14 @@ class JsonMultiFactory(universe: Universe, explorer: Boolean = false) extends Ab
   override val simpleParamsAsString = true
 
   case class Page(no: Int, main: Int) {
-    val objects     = new mutable.HashSet     [Int]
-    val renumbered  = new mutable.ArrayBuffer [Int]
+    val objects   : mutable.Set   [Int] = mutable.Set   .empty
+    val renumbered: mutable.Buffer[Int] = mutable.Buffer.empty
 
     lazy val renumberedMap: Map[Int, Int] =
       renumbered.zipWithIndex.toMap // don't access until "renumbered" is stable
   }
 
-  def generate(universe: Universe): Unit = {
+  def generate(): Unit = {
     if (explorer) {
       val p = "/com/novocode/extradoc/explorer"
       copyResource(p, "index.html")
@@ -82,12 +84,12 @@ class JsonMultiFactory(universe: Universe, explorer: Boolean = false) extends Ab
           case Some(Link(target)) =>
             pages get target orElse (allModels get target flatMap (ch => findPage(target, ch)))
           case Some(j: JObject) => findPage(-1, j)
-          case None => None
+          case _ /*None*/ => None
         }
       case _ => None
     }
 
-    val extra = new mutable.HashSet[Int]
+    val extra = mutable.Set.empty[Int]
     allModels foreach { case (ord, j) =>
       (pages get ord orElse findPage(ord, j) map (_.objects) getOrElse extra) += ord
     }
@@ -114,7 +116,7 @@ class JsonMultiFactory(universe: Universe, explorer: Boolean = false) extends Ab
     }
     println(s"Total number of extra objects on all pages: $extraTotal")
 
-    val keepHtmlLinks = new mutable.HashSet[Int]
+    val keepHtmlLinks = mutable.Set.empty[Int]
     allModels.values foreach {
       _ foreachRec {
         case j: JObject =>
@@ -142,7 +144,7 @@ class JsonMultiFactory(universe: Universe, explorer: Boolean = false) extends Ab
 
     println("Inlining objects on all pages")
     var totalInlined = 0
-    val counts = new mutable.HashMap[Int, Int]
+    val counts = mutable.Map.empty[Int, Int]
     allModels.values foreach {
       _ foreachRec {
         _.links foreach { l =>
@@ -183,17 +185,17 @@ class JsonMultiFactory(universe: Universe, explorer: Boolean = false) extends Ab
       case _ =>
     }
 
-    val remappedIDs = new mutable.HashMap[Link, (Int, Int)]
+    val remappedIDs = mutable.Map.empty[Link, (Int, Int)]
     for (p <- pages.values) {
       p.renumbered += p.main
-      remappedIDs += Link(p.main) -> (p.no, 0)
+      remappedIDs += Link(p.main) -> ((p.no, 0))
       for (ord <- p.objects if ord != p.main) {
-        remappedIDs += Link(ord) -> (p.no, p.renumbered.size)
+        remappedIDs += Link(ord) -> ((p.no, p.renumbered.size))
         p.renumbered += ord
       }
     }
     println(s"Writing p0.json to p${pages.size - 1}.json")
-    val globalNames = new mutable.HashMap[String, String]
+    val globalNames = mutable.Map.empty[String, String]
 
     def convertLink(p: Page)(l: Link): Unit = {
       val localIdx: Option[Int] = p.renumberedMap get l.target
@@ -235,7 +237,7 @@ class JsonMultiFactory(universe: Universe, explorer: Boolean = false) extends Ab
     }.toMap
     val linearPackages = allPackages.toSeq sortBy { case (_, (j, _)) => j("qName").get.asInstanceOf[String] }
     println("Writing global.json")
-    val processedTemplates = new mutable.HashSet[Int]
+    val processedTemplates = mutable.Set.empty[Int]
 
     def processTemplates(jOrd: Int, j: JObject, jo: JObject): Unit = {
       j("members") foreach { case a: JArray =>

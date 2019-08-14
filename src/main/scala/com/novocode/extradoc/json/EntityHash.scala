@@ -2,7 +2,7 @@ package com.novocode.extradoc.json
 
 import scala.tools.nsc.doc.model._
 
-final case class EntityHash[+E <: Entity](e: E) extends Function0[E] {
+final case class EntityHash[+E <: AnyRef /*Entity*/](e: E) extends Function0[E] {
 
   override def hashCode: Int = e match {
     case t: NoDocTemplate => t.qualifiedName.hashCode

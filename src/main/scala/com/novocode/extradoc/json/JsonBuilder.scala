@@ -1,19 +1,22 @@
 package com.novocode.extradoc.json
 
 import scala.collection._
+import scala.reflect.internal.Reporter
 import scala.tools.nsc.doc.base.comment._
 import scala.tools.nsc.doc.model._
 import scala.xml.{Elem, NodeBuffer, NodeSeq, Text, Xhtml}
 
-abstract class JsonBuilder[Link: CanBeValue] {
+abstract class JsonBuilder { builder =>
 
-  val typeEntitiesAsHtml: Boolean
-  val compactFlags: Boolean
+  val typeEntitiesAsHtml  : Boolean
+  val compactFlags        : Boolean
   val removeSimpleBodyDocs: Boolean
 
   val mergeInheritedMembers = true
 
-  def global[T <: Entity](e: T)(f: T => JObject): Link
+  def reporter: Reporter
+
+  def global[E <: AnyRef](e: E)(f: E => JObject)(implicit view: EntityView[E]): Link
 
   def as[T](o: AnyRef)(f: T => Unit)(implicit m: ClassManifest[T]): Unit =
     if (m.erasure.isInstance(o)) f(o.asInstanceOf[T])
@@ -25,6 +28,8 @@ abstract class JsonBuilder[Link: CanBeValue] {
       links += global(e)(createEntity)
       "#"
     }
+
+    protected def docletReporter: Reporter = builder.reporter
   }
 
   def createHtml(f: HtmlGen => NodeSeq): JObject = {
@@ -90,13 +95,13 @@ abstract class JsonBuilder[Link: CanBeValue] {
     val j = new JObject
     if (typeEntitiesAsHtml) {
       val b     = new NodeBuffer
-      val links = new mutable.ArrayBuffer[Link]
+      val links = mutable.Buffer.empty[Link]
       val name  = t.name
       var pos   = 0
       t.refEntity .foreach { case (start, (ref, len)) =>
         if (pos < start) b += Text(name.substring(pos, start))
         links += global(ref)(createEntity _)
-        b += Elem(null, "a", null, xml.TopScope, Text(name.substring(start, start + len)))
+        b += Elem(null, "a", null, xml.TopScope, minimizeEmpty = false, child = Text(name.substring(start, start + len)))
         pos = start + len
       }
       if (pos < name.length) b += Text(name.substring(pos))
@@ -116,21 +121,28 @@ abstract class JsonBuilder[Link: CanBeValue] {
     j
   }
 
-  def createEntity(e: Entity): JObject = {
+  def createEntity[E <: AnyRef](e: E)(implicit view: EntityView[E]): JObject = {
     val j = new JObject
-    j += "inTemplate" -> global(e.inTemplate)(createEntity)
+//    j += "inTemplate" -> global(e.inTemplate)(createEntity _)
+    e match { // HH
+      case e1: Entity => j += "inTemplate" -> global(e1.inTemplate)(createEntity _)
+    }
+
     // "toRoot" is own ID plus recursively toRoot of inTemplate
     //j += "toRoot" -> JArray(e.toRoot.map(e => global(e)(createEntity _)))
-    val qName = e.qualifiedName
-    var name  = e.name
-    val sep1  = qName.lastIndexOf('#')
-    val sep2  = qName.lastIndexOf('.')
-    val sep   = if (sep1 > sep2) sep1 else sep2
-    if (sep > 0 && qName.substring(sep + 1) == name || sep == -1 && qName == name) name = null
-    j += "qName" -> e.qualifiedName
-    if (name ne null) j += "name" -> e.name
+    val qName = view.qNameOption(e).orNull
+    var name  = view.nameOption (e).orNull
+    if (qName ne null) {
+      val sep1  = qName.lastIndexOf('#')
+      val sep2  = qName.lastIndexOf('.')
+      val sep   = if (sep1 > sep2) sep1 else sep2
+      if (sep > 0 && qName.substring(sep + 1) == name || sep == -1 && qName == name) name = null
+      j += "qName" -> qName
+    }
+    if (name ne null) j += "name" -> name
     var isPackageOrClassOrTraitOrObject = false
     var isClassOrTrait = false
+
     as[TemplateEntity](e) { t =>
       isPackageOrClassOrTraitOrObject = t.isPackage || t.isClass || t.isTrait || t.isObject || t.isRootPackage
       isClassOrTrait = t.isClass || t.isTrait
@@ -153,6 +165,7 @@ abstract class JsonBuilder[Link: CanBeValue] {
     //as[NoDocTemplate](e) { t => j += "isNoDocTemplate" -> true }
     var vParams: Map[String, JObject] = Map.empty
     var tParams: Map[String, JObject] = Map.empty
+
     as[MemberEntity](e) { m =>
       m.comment foreach { c =>
         val (comment, v, t) = createComment(c)
@@ -167,34 +180,50 @@ abstract class JsonBuilder[Link: CanBeValue] {
         if (m.visibility.isProtected) j += "isProtected" -> true
         if (m.visibility.isPublic) j += "isPublic" -> true
       }
-      as[PrivateInTemplate  ](m.visibility) { p => j += "visibleIn" -> global(p.owner)(createEntity _) }
-      as[ProtectedInTemplate](m.visibility) { p => j += "visibleIn" -> global(p.owner)(createEntity _) }
+
+      as[PrivateInTemplate  ](m.visibility) { p =>
+        p.owner.foreach { owner =>
+          j += "visibleIn" -> global(owner)(createEntity _)
+        }
+      }
+
+      as[ProtectedInTemplate](m.visibility) { p =>
+        p.owner.foreach { owner =>
+          j += "visibleIn" -> global(owner)(createEntity _)
+        }
+      }
+
       if (mergeInheritedMembers) {
-        if (!m.inheritedFrom.isEmpty) {
-          /* Remove "inheritedFrom", replace "inTemplate" with first from
-             "inDefinitionTemplates" and replace "qName" with "definitionName"
-             to make this inherited member definition identical to the original
-             one so it can be compacted away and remapped to the correct
-             page. */
-          val originalOwnerLink = global(m.inDefinitionTemplates.head)(createEntity)
-          j += "inTemplate" -> originalOwnerLink
-          j += "qName" -> m.definitionName
-          /* If the member is visible in its inTemplate, it must have been
-             inDefinitionTemplates.first at the point of its definition, so we
-             rewrite it that way. */
-          if (j("visibleIn", Link(-1)).target != -1)
-            j += "visibleIn" -> originalOwnerLink
-          // inDefinitionTemplate.head has already become inTemplate
-          j +?= "alsoIn" -> JArray(m.inDefinitionTemplates.tail.map(e => global(e)(createEntity)))
-        } else {
+        // XXX TODO
+
+//        if (!m.inheritedFrom.isEmpty) {
+//          /* Remove "inheritedFrom", replace "inTemplate" with first from
+//             "inDefinitionTemplates" and replace "qName" with "definitionName"
+//             to make this inherited member definition identical to the original
+//             one so it can be compacted away and remapped to the correct
+//             page. */
+//          val originalOwnerLink = global(m.inDefinitionTemplates.head)(createEntity)
+//          j += "inTemplate" -> originalOwnerLink
+//          j += "qName" -> m.definitionName
+//          /* If the member is visible in its inTemplate, it must have been
+//             inDefinitionTemplates.first at the point of its definition, so we
+//             rewrite it that way. */
+//          if (j("visibleIn", Link(-1)).target != -1)
+//            j += "visibleIn" -> originalOwnerLink
+//          // inDefinitionTemplate.head has already become inTemplate
+//          j +?= "alsoIn" -> JArray(m.inDefinitionTemplates.tail.map(e => global(e)(createEntity)))
+//        } else
+        {
           // filter out inTemplate
           j +?= "alsoIn" -> JArray(m.inDefinitionTemplates.filter(_ != m.inTemplate).map(e => global(e)(createEntity)))
         }
         // definitionName is always identical to qName, so leave it out
       } else {
-        j +?= "inheritedFrom" -> JArray(m.inheritedFrom.map(e => global(e)(createEntity)))
+        // XXX TODO
+//        j +?= "inheritedFrom" -> JArray(m.inheritedFrom.map(e => global(e)(createEntity)))
         j +?= "definitionName" -> m.definitionName
       }
+
       m.flags.map(createBlock) foreach { fj =>
         fj("_html") match {
           case Some("<p>sealed</p>") =>
@@ -206,52 +235,74 @@ abstract class JsonBuilder[Link: CanBeValue] {
           case _ =>
         }
       }
+
       m.deprecation .foreach { d => j += "deprecation" -> createBody(d) }
+
       if (!m.isAliasType && !isPackageOrClassOrTraitOrObject) {
         j += "resultType" -> createTypeEntity(m.resultType)
       }
+
       if (compactFlags) {
         if (m.isDef         ) set(j, 'd')
         if (m.isVal         ) set(j, 'v')
         if (m.isLazyVal     ) set(j, 'l')
         if (m.isVar         ) set(j, 'V')
-        if (m.isImplicit    ) set(j, 'm')
+        // XXX TODO
+//        if (m.isImplicit    ) set(j, 'm')
         if (m.isConstructor ) set(j, 'n')
         if (m.isAliasType   ) set(j, 'a')
         if (m.isAbstractType) set(j, 'A')
-        if (m.isTemplate    ) set(j, 'M')
+        // XXX TODO
+//        if (m.isTemplate    ) set(j, 'M')
       } else {
         if (m.isDef         ) j += "isDef"          -> true
         if (m.isVal         ) j += "isVal"          -> true
         if (m.isLazyVal     ) j += "isLazyVal"      -> true
         if (m.isVar         ) j += "isVar"          -> true
-        if (m.isImplicit    ) j += "isImplicit"     -> true
+        // XXX TODO
+//        if (m.isImplicit    ) j += "isImplicit"     -> true
         if (m.isConstructor ) j += "isConstructor"  -> true
         if (m.isAliasType   ) j += "isAliasType"    -> true
         if (m.isAbstractType) j += "isAbstractType" -> true
-        if (m.isTemplate    ) j += "isTemplate"     -> true
+        // XXX TODO
+//        if (m.isTemplate    ) j += "isTemplate"     -> true
       }
-    }
+    } // as[MemberEntity](e)
+
     as[DocTemplateEntity](e) { t =>
-      t.sourceUrl foreach { u => j +?= "sourceUrl" -> u.toString }
+      t.sourceUrl .foreach { u => j +?= "sourceUrl" -> u.toString }
       j +?= "typeParams" -> createTypeParams(t.typeParams, tParams)
-      t.parentType foreach { p => j += "parentType" -> createTypeEntity(p) }
+//      t.parentType .foreach { p => j += "parentType" -> createTypeEntity(p) }
+      t.parentTypes.foreach { case (_ /*pTemp*/, pType) =>
+        j += "parentType" -> createTypeEntity(pType)  // XXX TODO correct?
+      }
+
       // "parentTemplates" is not needed and has been removed in Scala trunk (2.9)
       //j +?= "parentTemplates" -> JArray(t.parentTemplates.map(e => global(e)(createEntity _)))
-      j +?= "linearization" -> JArray(t.linearization.map(e => global(e)(createEntity)))
-      j +?= "subClasses" -> JArray(t.subClasses.map(e => global(e)(createEntity)))
+
+//      j +?= "linearization" -> JArray(t.linearization .map(e => global(e)(createEntity)))
+      j +?= "linearization" -> JArray(t.linearizationTypes .map(e => global(e)(createEntity)))  // XXX  TODO correct?
+
+//      j +?= "subClasses"    -> JArray(t.subClasses    .map(e => global(e)(createEntity)))
+      // HH
+      j +?= "subClasses"    -> JArray(t.directSubClasses.map(e => global(e)(createEntity)))
+
       // "members" is constructors + templates + methods + values + abstractTypes + aliasTypes + packages
       j +?= "members" -> JArray(t.members.map(e => global(e)(createEntity)))
+
       //j +?= "templates" -> JArray(t.templates.map(e => global(e)(createEntity _)))
       //j +?= "methods" -> JArray(t.methods.map(e => global(e)(createEntity _)))
       //j +?= "values" -> JArray(t.values.map(e => global(e)(createEntity _)))
       //j +?= "abstractTypes" -> JArray(t.abstractTypes.map(e => global(e)(createEntity _)))
       //j +?= "aliasTypes" -> JArray(t.aliasTypes.map(e => global(e)(createEntity _)))
-      t.companion foreach { p => j += "companion" -> global(p)(createEntity) }
+
+      t.companion .foreach { p => j += "companion" -> global(p)(createEntity) }
     }
+
     as[Trait](e) { t =>
       j +?= "valueParams" -> createValueParams(t.valueParams, vParams)
     }
+
     as[Class](e) { c =>
       //j +?= "constructors" -> JArray(c.constructors.map(e => global(e)(createEntity _)))
       if (c.isCaseClass) {
@@ -259,6 +310,7 @@ abstract class JsonBuilder[Link: CanBeValue] {
         else j += "isCaseClass" -> true
       }
     }
+
     //as[Package](e) { p => j +?= "packages" -> JArray(p.packages.map(e => global(e)(createEntity _))) }
     as[NonTemplateMemberEntity](e) { n =>
       if (n.isUseCase) {
@@ -266,10 +318,12 @@ abstract class JsonBuilder[Link: CanBeValue] {
         else j += "isUseCase" -> true
       }
     }
+
     as[Def](e) { d =>
       j +?= "typeParams" -> createTypeParams(d.typeParams, tParams)
       j +?= "valueParams" -> createValueParams(d.valueParams, vParams)
     }
+
     as[Constructor](e) { c =>
       if (c.isPrimary) {
         if (compactFlags) set(j, 'P')
@@ -277,32 +331,56 @@ abstract class JsonBuilder[Link: CanBeValue] {
       }
       j +?= "valueParams" -> createValueParams(c.valueParams, vParams)
     }
+
     as[AbstractType](e) { a =>
       a.lo foreach { t => j +?= "lo" -> createTypeEntity(t) }
       a.hi foreach { t => j +?= "hi" -> createTypeEntity(t) }
     }
+
     as[AliasType](e) { a => j += "alias" -> createTypeEntity(a.alias) }
+
+//    as[ParameterEntity](e) { p =>
+//      if (!compactFlags) {
+//        // These two are not represented with compact flags
+//        if (p.isTypeParam ) j += "isTypeParam" -> true
+//        if (p.isValueParam) j += "isValueParam" -> true
+//      }
+//      j -= "inTemplate"
+//    }
+
     as[ParameterEntity](e) { p =>
       if (!compactFlags) {
         // These two are not represented with compact flags
-        if (p.isTypeParam ) j += "isTypeParam" -> true
-        if (p.isValueParam) j += "isValueParam" -> true
+        as[TypeParam](p) { _ =>
+          j += "isTypeParam" -> true
+        }
+        as[ValueParam](p) { _ =>
+          j += "isValueParam" -> true
+        }
       }
       j -= "inTemplate"
     }
+
     as[TypeParam](e) { t =>
       j +?= "variance" -> t.variance
       t.lo foreach { t => j +?= "lo" -> createTypeEntity(t) }
       t.hi foreach { t => j +?= "hi" -> createTypeEntity(t) }
     }
+
     as[ValueParam](e) { v =>
       j += "resultType" -> createTypeEntity(v.resultType)
-      v.defaultValue foreach { s => j += "defaultValue" -> s }
+
+      // XXX TODO : look at the tree `s`
+
+//      v.defaultValue.foreach { s =>
+//        j += "defaultValue" -> s
+//      }
       if (v.isImplicit) {
         if (compactFlags) set(j, 'm')
         else j += "isImplicit" -> true
       }
     }
+
     // Traits have empty dummy valueParams, and for classes they are
     // duplicates from the primary constructor
     if (isClassOrTrait) j -= "valueParams"
