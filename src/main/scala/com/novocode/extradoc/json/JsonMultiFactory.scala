@@ -51,15 +51,14 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
 
     def findPage(ord: Int, j: JBase): Option[Page] = j match {
       case j: JObject =>
-        val isPage = pages contains ord
-        val isPackage = j !! "isPackage" || j("is", "").contains('p')
+        val isPage    = pages.contains(ord)
+        val isPackage = j.has("isPackage") || j.getOrElse("is", "").contains('p')
+        def isObject  = j.has("isObject" ) || j.getOrElse("is", "").contains('b')
 
-        def isObject = j !! "isObject" || j("is", "").contains('b')
-
-        lazy val parent = j("inTemplate") collect { case Link(t) => allModels(t) }
+        lazy val parent = j.get("inTemplate") collect { case Link(t) => allModels(t) }
 
         def parentIsTemplate: Boolean = parent collect { case par: JObject =>
-          par !! "isTemplate" || par("is", "").contains('M')
+          par.has("isTemplate") || par.getOrElse("is", "").contains('M')
         } getOrElse false
 
         def isInParent = parent collect { case par: JObject =>
@@ -70,17 +69,17 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
               tt !! "isVal" || tt !! "isMethod" || ttIs.contains("") || ttIs.contains("")
             case _ => false
           }*/
-          par("members", JArray.Empty).values contains Link(ord)
+          par.getOrElse("members", JArray.Empty).values contains Link(ord)
         } getOrElse false
 
-        val companionPage = j("companion") map { case l: Link => pages get l.target }
+        val companionPage = j.get("companion") map { case l: Link => pages get l.target }
         // Don't map external packages to their parents
         if (ord >= 0 && isPackage && !isPage) None
         // Map auto-generated case class companion objects without a separate page to their classes
         else if (isObject && companionPage.isDefined && !isPage) companionPage.get
         // Treat members which were remapped but not compacted away as extras
         else if ((isDef(j) || isVal(j) || isAliasType(j)) && !isInParent && parentIsTemplate) None
-        else j("inTemplate") match {
+        else j.get("inTemplate") match {
           case Some(Link(target)) =>
             pages get target orElse (allModels get target flatMap (ch => findPage(target, ch)))
           case Some(j: JObject) => findPage(-1, j)
@@ -111,16 +110,16 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
       }
     }
 
-    pages.values foreach { p =>
-      p.objects map allModels foreach { j => mapExtras(p, j) }
+    pages.values.foreach { p =>
+      p.objects.map(allModels).foreach { j => mapExtras(p, j) }
     }
     println(s"Total number of extra objects on all pages: $extraTotal")
 
     val keepHtmlLinks = mutable.Set.empty[Int]
-    allModels.values foreach {
-      _ foreachRec {
+    allModels.values.foreach {
+      _.foreachRec {
         case j: JObject =>
-          j("_links", JArray.Empty).values foreach {
+          j.getOrElse("_links", JArray.Empty).values.foreach {
             keepHtmlLinks += _.asInstanceOf[Link].target
           }
         case _ =>
@@ -129,10 +128,10 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
 
     println("Removing extra objects which are duplicated further up the linarization")
     var removedExtras = 0
-    pages.values foreach { p =>
-      allModels(p.main).apply("linearization", JArray.Empty).values foreach {
+    pages.values.foreach { p =>
+      allModels(p.main).getOrElse("linearization", JArray.Empty).values.foreach {
         case Link(l) if l != p.main =>
-          pages get l foreach { p2 =>
+          pages.get(l).foreach { p2 =>
             val s = p.objects.size
             p.objects --= (p2.objects intersect extra)
             removedExtras += s - p.objects.size
@@ -145,9 +144,9 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
     println("Inlining objects on all pages")
     var totalInlined = 0
     val counts = mutable.Map.empty[Int, Int]
-    allModels.values foreach {
-      _ foreachRec {
-        _.links foreach { l =>
+    allModels.values.foreach {
+      _.foreachRec {
+        _.links.foreach { l =>
           val j = allModels(l.target)
           if ((extra contains l.target) && !(keepHtmlLinks contains l.target) && !(isDef(j) || isVal(j)))
             counts += l.target -> (counts.getOrElse(l.target, 0) + 1)
@@ -162,15 +161,11 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
         p.objects --= toInline
 
         def replaceIn(j: JBase): Unit = {
-          j replaceLinks repl
-          j.children foreach {
-            replaceIn
-          }
+          j.replaceLinks(repl)
+          j.children.foreach(replaceIn)
         }
 
-        allModels.filter { case (ord, _ /*j*/ ) => p.objects contains ord }.values.foreach {
-          replaceIn
-        }
+        allModels.filter { case (ord, _ /*j*/ ) => p.objects contains ord }.values.foreach(replaceIn)
       }
     }
     println(s"Inlined $totalInlined objects")
@@ -179,7 +174,9 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
     allModels.values foreach {
       case j: JObject =>
         if (isDef(j) || isVal(j) || isAliasType(j)) {
-          if (j("name").isEmpty && j("qName").isDefined) j += "name" -> qNameToName(j("qName", ""))
+          if (j.get("name").isEmpty && j.get("qName").isDefined) {
+            j += "name" -> qNameToName(j.getOrElse("qName", ""))
+          }
           j -= "qName"
         }
       case _ =>
@@ -200,24 +197,25 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
     def convertLink(p: Page)(l: Link): Unit = {
       val localIdx: Option[Int] = p.renumberedMap get l.target
       val localOrParentIdx: Option[Any] = localIdx orElse {
-        val lin = allModels(p.main).apply("linearization", JArray.Empty).values
+        val lin = allModels(p.main).getOrElse("linearization", JArray.Empty).values
         val parentIdx = lin.toSeq.view flatMap {
           case Link(t2) =>
-            pages get t2 flatMap { p2 => p2.renumberedMap get l.target map {
-              (p2.no, _)
-            }
+            pages.get(t2).flatMap { p2 =>
+              p2.renumberedMap.get(l.target).map {
+                (p2.no, _)
+              }
             }
           case _ => None
         }
         parentIdx.map { case (page, idx) => JArray(Seq(page, idx)) }.headOption
       }
-      localOrParentIdx getOrElse {
+      localOrParentIdx.getOrElse {
         val (page, idx) = remappedIDs(l)
         if (idx == 0 || page != p.no) {
           val jo = allModels(l.target)
-          jo("name") orElse {
-            jo("qName") map { q => qNameToName(q.asInstanceOf[String]) }
-          } foreach { case n: String =>
+          jo.get("name").orElse {
+            jo.get("qName").map { q => qNameToName(q.asInstanceOf[String]) }
+          } .foreach { case n: String =>
             globalNames += s"$page,$idx" -> n
           }
         }
@@ -226,41 +224,42 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
     }
 
     for (p <- pages.values) {
-      JsonWriter(siteRoot, s"p${p.no}.json") createArray { w =>
+      JsonWriter(siteRoot, s"p${p.no}.json").createArray { w =>
         for (ord <- p.renumbered) w.write(allModels(ord), convertLink(p))
       }
     }
 
     val pageObjects = pages.values map { p => (p.no, (allModels(p.main), p.main)) }
     val allPackages = pageObjects.filter { case (_, (j, _)) =>
-      j("isPackage").getOrElse(false) == true || j("is", "").contains('p')
+      j.get("isPackage").getOrElse(false) == true || j.getOrElse("is", "").contains('p')
     }.toMap
-    val linearPackages = allPackages.toSeq sortBy { case (_, (j, _)) => j("qName").get.asInstanceOf[String] }
+    val linearPackages = allPackages.toSeq sortBy { case (_, (j, _)) => j.get("qName").get.asInstanceOf[String] }
     println("Writing global.json")
     val processedTemplates = mutable.Set.empty[Int]
 
     def processTemplates(jOrd: Int, j: JObject, jo: JObject): Unit = {
-      j("members") foreach { case a: JArray =>
-        val children = a.values collect { case l: Link =>
+      j.get("members").foreach { case a: JArray =>
+        val children = a.values.collect { case l: Link =>
           (l.target, allModels(l.target))
-        } filter { case (_, j: JObject) =>
-          val up = j("inTemplate") collect { case l: Link => l.target } getOrElse -1
-          val isTemplate = j !! "isTemplate" || j("is", "").contains('M')
+        } .filter { case (_, j: JObject) =>
+          val up = j.get("inTemplate") .collect { case l: Link => l.target } .getOrElse(-1)
+          val isTemplate = j.has("isTemplate") || j.getOrElse("is", "").contains('M')
           isTemplate && (up == -1 || up == jOrd)
         }
         val tlChildren = children.map { case (ord, j: JObject) =>
-          val is = j("is", "")
+          val is = j.getOrElse("is", "")
           val kind =
-            if (j !! "isClass" || is.contains('c')) 'c'
-            else if (j !! "isTrait" || is.contains('t')) 't'
-            else if (j !! "isObject" || is.contains('b')) 'b'
+            if      (j.has("isClass"  ) || is.contains('c')) 'c'
+            else if (j.has("isTrait"  ) || is.contains('t')) 't'
+            else if (j.has("isObject" ) || is.contains('b')) 'b'
             else '_'
+
           (ord, j, kind)
-        }.filter { case (ord, _, kind) => (pages contains ord) && (kind != '_') }.toSeq
-        val sortedChildren = tlChildren sortBy { case (_, j: JObject, kind) =>
-          (j("qName", "").toLowerCase, kind)
+        }.filter { case (ord, _, kind) => pages.contains(ord) && (kind != '_') }.toSeq
+        val sortedChildren = tlChildren.sortBy { case (_, j: JObject, kind) =>
+          (j.getOrElse("qName", "").toLowerCase, kind)
         }
-        jo addOpt "e" -> JArray(sortedChildren map { case (ord, chj, kind) =>
+        jo.addOpt("e" -> JArray(sortedChildren.map { case (ord, chj, kind) =>
           val ch = new JObject
           ch += "p" -> pages(ord).no
           ch += "k" -> kind.toString
@@ -269,7 +268,7 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
             processTemplates(ord, chj, ch)
           }
           ch
-        })
+        }))
       }
     }
 
@@ -280,20 +279,18 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
       w.write("packages", JArray(linearPackages map { case (no, (j: JObject, ord)) =>
         val jo = new JObject
         jo += "p" -> no
-        jo += "n" -> j("qName").get.asInstanceOf[String]
-        j("inTemplate") foreach { case l: Link => jo += "in" -> pages(l.target).no }
+        jo += "n" -> j.get("qName").get.asInstanceOf[String]
+        j.get("inTemplate") foreach { case l: Link => jo += "in" -> pages(l.target).no }
         processTemplates(ord, j, jo)
         jo
       }), {
         _.target
       })
       val settings = new JObject
-      if (!universe.settings.doctitle.isDefault) settings += "doctitle" -> universe.settings.doctitle.value
-      if (!universe.settings.docversion.isDefault) settings += "docversion" -> universe.settings.docversion.value
-      if (!universe.settings.docsourceurl.isDefault) settings += "docsourceurl" -> universe.settings.docsourceurl.value
-      w.write("settings", settings, {
-        _.target
-      })
+      if (!universe.settings.doctitle     .isDefault) settings += "doctitle"      -> universe.settings.doctitle     .value
+      if (!universe.settings.docversion   .isDefault) settings += "docversion"    -> universe.settings.docversion   .value
+      if (!universe.settings.docsourceurl .isDefault) settings += "docsourceurl"  -> universe.settings.docsourceurl .value
+      w.write("settings", settings, _.target)
     }
   }
 
@@ -301,7 +298,7 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
     println("Aliasing repeated comments")
 
     def forMembers(j: JObject)(f: (JObject, Link) => Unit): Unit = {
-      j("members", JArray.Empty).values foreach {
+      j.getOrElse("members", JArray.Empty).values.foreach {
         case l: Link => f(allModels(l.target), l)
         case _ =>
       }
@@ -312,7 +309,7 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
         var found: Option[Link] = None
         forMembers(allModels(t.target)) { (member, memberLink) =>
           if (memberLink != notIn) {
-            member("comment") foreach {
+            member.get("comment").foreach {
               case mc: JObject =>
                 if (found.isEmpty && mc == c) found = Some(memberLink)
               case _ =>
@@ -325,17 +322,17 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
     }
 
     var count = 0
-    allModels foreach {
+    allModels.foreach {
       case (idx, j: JObject) =>
-        val lin = (Link(idx) :: j("linearization", JArray.Empty).values.toList).asInstanceOf[List[Link]]
+        val lin = (Link(idx) :: j.getOrElse("linearization", JArray.Empty).values.toList).asInstanceOf[List[Link]]
         forMembers(j) { (member, memberLink) =>
           var found: Option[Link] = None
-          member("comment") foreach {
+          member.get("comment").foreach {
             case c: JObject =>
               findComment(c, lin, memberLink) foreach { l => found = Some(l) }
             case _ =>
           }
-          found foreach { l =>
+          found.foreach { l =>
             member += "commentIn" -> l
             member -= "comment"
             count += 1
@@ -346,15 +343,15 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
 
     @scala.annotation.tailrec
     def chaseCommentIn(j: JObject, jLink: Option[Link]): Option[Link] = {
-      j("commentIn") match {
+      j.get("commentIn") match {
         case Some(l: Link) => chaseCommentIn(allModels(l.target), Some(l))
         case _ => jLink
       }
     }
 
-    allModels foreach { case (_, j) =>
+    allModels.foreach { case (_, j) =>
       forMembers(j) { (member, _) =>
-        chaseCommentIn(member, None) foreach { l =>
+        chaseCommentIn(member, None).foreach { l =>
           member += "commentIn" -> l
         }
       }
@@ -362,9 +359,10 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
     println(s"Aliased $count comments")
   }
 
-  def isDef(j: JObject): Boolean = j !! "isDef" || j("is", "").contains('d')
+  def isDef(j: JObject): Boolean = j.has("isDef") || j.getOrElse("is", "").contains('d')
 
-  def isVal(j: JObject): Boolean = j !! "isVal" || j("is", "").contains('v') || j !! "isLazyVal" || j("is", "").contains('l')
+  def isVal(j: JObject): Boolean = j.has("isVal") || j.getOrElse("is", "").contains('v') ||
+    j.has("isLazyVal") || j.getOrElse("is", "").contains('l')
 
-  def isAliasType(j: JObject): Boolean = j !! "isAliasType" || j("is", "").contains('a')
+  def isAliasType(j: JObject): Boolean = j.has("isAliasType") || j.getOrElse("is", "").contains('a')
 }

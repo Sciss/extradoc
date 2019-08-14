@@ -142,16 +142,16 @@ sealed class JObject extends JBase {
     }
   }
 
-  def apply(key: String): Option[Any] = m.get(key)
+  def get(key: String): Option[Any] = m.get(key)
 
-  def apply[T: ClassManifest](key: String, default: T): T = m.get(key) match {
+  def getOrElse[T: ClassManifest](key: String, default: T): T = m.get(key) match {
     case Some(v) if implicitly[ClassManifest[T]].erasure.isInstance(v) => v.asInstanceOf[T]
     case _ => default
   }
 
   def keys: CIterator[String] = m.keys.iterator
 
-  def !!(k: String): Boolean = m.get(k) match {
+  def has(k: String): Boolean = m.get(k) match {
     case None | Some("") | Some(0) | Some(false) => false
     case _ => true
   }
@@ -267,7 +267,7 @@ object LimitedEquality {
 
     case (a: JObject, b: JObject) =>
       keys forall { k =>
-        (a(k), b(k)) match {
+        (a.get(k), b.get(k)) match {
           case (None, None) => true
           case (None, _) => false
           case (_, None) => false

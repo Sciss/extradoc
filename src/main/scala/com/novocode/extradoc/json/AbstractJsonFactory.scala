@@ -141,8 +141,8 @@ abstract class AbstractJsonFactory(val universe: doc.Universe, val reporter: Rep
     }
 
     allModels.values foreach { j =>
-      j("typeParams", JArray.Empty) transform {
-        case (_, l@Link(t)) => simple(t) getOrElse l
+      j.getOrElse("typeParams", JArray.Empty).transform {
+        case (_, l@Link(t)) => simple(t).getOrElse(l)
         case (_, o) => o
       }
       /* j("valueParams", JArray.Empty).values foreach {
@@ -182,9 +182,9 @@ abstract class AbstractJsonFactory(val universe: doc.Universe, val reporter: Rep
     def f(ord: Int): Unit = {
       if (!global.contains(ord)) {
         val j = allModels(ord)
-        if (j !! "isTemplate" || j("is", "").contains('M')) {
+        if (j.has("isTemplate") || j.getOrElse("is", "").contains('M')) {
           global += ord
-          j("members", JArray.Empty).values.foreach {
+          j.getOrElse("members", JArray.Empty).values.foreach {
             case Link(target) => f(target)
             case _ =>
           }
@@ -202,7 +202,7 @@ abstract class AbstractJsonFactory(val universe: doc.Universe, val reporter: Rep
     allModels.values.foreach {
       _.foreachRec {
         case j: JObject =>
-          j("_links", JArray.Empty).values.foreach {
+          j.getOrElse("_links", JArray.Empty).values.foreach {
             keep += _.asInstanceOf[Link].target
           }
         case _ =>
@@ -253,7 +253,7 @@ abstract class AbstractJsonFactory(val universe: doc.Universe, val reporter: Rep
   }
 
   def nameFor(j: JObject): Option[String] =
-    j("name").orElse {
-      j("qName").map { q => qNameToName(q.asInstanceOf[String]) }
+    j.get("name").orElse {
+      j.get("qName").map { q => qNameToName(q.asInstanceOf[String]) }
     }.asInstanceOf[Option[String]]
 }

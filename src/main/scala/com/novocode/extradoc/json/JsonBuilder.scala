@@ -56,18 +56,18 @@ abstract class JsonBuilder { builder =>
   def createComment(c: cm.Comment): (JObject, CMap[String, JObject], CMap[String, JObject]) = {
     val j             = new JObject
     val bodyDoc       = createBody(c.body)
-    val bodyIsEmpty   = (bodyDoc("_html") getOrElse "") == ""
+    val bodyIsEmpty   = (bodyDoc.get("_html") getOrElse "") == ""
     val shortDoc      = createInline(c.short)
-    val shortIsEmpty  = (shortDoc("_html") getOrElse "") == ""
+    val shortIsEmpty  = (shortDoc.get("_html") getOrElse "") == ""
 
     if (!shortIsEmpty) j += "short" -> shortDoc
 
     if (removeSimpleBodyDocs) {
-      val bodyHtml      = bodyDoc ("_html").getOrElse("").asInstanceOf[String]
-      val shortHtml     = shortDoc("_html").getOrElse("").asInstanceOf[String]
+      val bodyHtml      = bodyDoc .get("_html").getOrElse("").asInstanceOf[String]
+      val shortHtml     = shortDoc.get("_html").getOrElse("").asInstanceOf[String]
       val bodyIsSimple  = bodyHtml == shortHtml
 
-      if (!bodyIsEmpty && (bodyDoc("_links").isDefined || shortDoc("_links").isDefined || !bodyIsSimple)) {
+      if (!bodyIsEmpty && (bodyDoc.get("_links").isDefined || shortDoc.get("_links").isDefined || !bodyIsSimple)) {
         j += "body" -> bodyDoc
       }
     } else if (!bodyIsEmpty) {
@@ -237,7 +237,7 @@ abstract class JsonBuilder { builder =>
       }
 
       m.flags.map(createBlock).foreach { fj =>
-        fj("_html") match {
+        fj.get("_html") match {
           case Some("<p>sealed</p>") =>
             if (compactFlags) set(j, 's') else j += "isSealed"    -> true
           case Some("<p>abstract</p>") =>
@@ -442,6 +442,6 @@ abstract class JsonBuilder { builder =>
    * f: isFinal
    */
   def set(j: JObject, flag: Char): Unit = {
-    j += "is" -> ((j("is") getOrElse "") + flag.toString)
+    j += "is" -> ((j.get("is") getOrElse "") + flag.toString)
   }
 }
