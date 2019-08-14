@@ -126,6 +126,7 @@ abstract class JsonBuilder { builder =>
 //    j += "inTemplate" -> global(e.inTemplate)(createEntity _)
     e match { // HH
       case e1: Entity => j += "inTemplate" -> global(e1.inTemplate)(createEntity _)
+      case _          =>  // ignore
     }
 
     // "toRoot" is own ID plus recursively toRoot of inTemplate

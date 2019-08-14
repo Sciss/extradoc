@@ -43,6 +43,7 @@ object ExtraDoc {
   def process(args: Array[String]): Unit = {
     
     val docSettings = new ExtraDocSettings(error)
+    docSettings.YpresentationAnyThread.value = true // because we use nsc.interactive.Global
     
     reporter = new ConsoleReporter(docSettings)
     
