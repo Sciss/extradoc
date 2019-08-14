@@ -31,17 +31,19 @@ class DocFactory(val reporter: Reporter, val settings: doc.Settings) { processor
   /** The unique compiler instance used by this processor and constructed from its `settings`. */
   // HH
 //  object compiler extends Global(settings, reporter)
-  object compiler extends nsc.interactive.Global(settings, reporter)
+  object compiler extends ScaladocGlobal(settings, reporter)
+//  object compiler extends nsc.interactive.Global(settings, reporter)
   {
-    override protected def computeInternalPhases(): Unit = {
-      phasesSet += syntaxAnalyzer
-      phasesSet += analyzer.namerFactory
-      phasesSet += analyzer.packageObjects
-      phasesSet += analyzer.typerFactory
-      phasesSet += superAccessors
-      phasesSet += pickler
-      phasesSet += refChecks
-    }
+
+//    override protected def computeInternalPhases(): Unit = {
+//      phasesSet += syntaxAnalyzer
+//      phasesSet += analyzer.namerFactory
+//      phasesSet += analyzer.packageObjects
+//      phasesSet += analyzer.typerFactory
+//      phasesSet += superAccessors
+//      phasesSet += pickler
+//      phasesSet += refChecks
+//    }
 
 //    override def onlyPresentation = true
 
