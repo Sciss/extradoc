@@ -1,4 +1,11 @@
-package com.novocode.extradoc.json
+/*
+ *  EntityView.scala
+ *  (ExtraDoc)
+ *
+ *  This software is published under the BSD 2-clause license
+ */
+
+package de.sciss.extradoc.json
 
 import scala.tools.nsc.doc.base.{LinkTo, LinkToExternalTpl, LinkToMember, LinkToTpl, Tooltip}
 import scala.tools.nsc.doc.model.{Entity, ParameterEntity, TypeEntity}

@@ -1,4 +1,11 @@
-package com.novocode.extradoc.json
+/*
+ *  JsonMultiFactory.scala
+ *  (ExtraDoc)
+ *
+ *  This software is published under the BSD 2-clause license
+ */
+
+package de.sciss.extradoc.json
 
 import scala.collection.{mutable, Map => CMap}
 import scala.tools.nsc.doc
@@ -55,13 +62,13 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
         val isPackage = j.has("isPackage") || j.getOrElse("is", "").contains('p')
         def isObject  = j.has("isObject" ) || j.getOrElse("is", "").contains('b')
 
-        lazy val parent = j.get("inTemplate") collect { case Link(t) => allModels(t) }
+        lazy val parent = j.get("inTemplate").collect { case Link(t) => allModels(t) }
 
-        def parentIsTemplate: Boolean = parent collect { case par: JObject =>
+        def parentIsTemplate: Boolean = parent.collect { case par: JObject =>
           par.has("isTemplate") || par.getOrElse("is", "").contains('M')
-        } getOrElse false
+        } .getOrElse(false)
 
-        def isInParent = parent collect { case par: JObject =>
+        def isInParent = parent.collect { case par: JObject =>
           /*val valuesAndMethods = par("members", JArray.Empty).values filter {
             case Link(t) =>
               val tt = allModels(t)
@@ -70,9 +77,9 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
             case _ => false
           }*/
           par.getOrElse("members", JArray.Empty).values contains Link(ord)
-        } getOrElse false
+        } .getOrElse(false)
 
-        val companionPage = j.get("companion") map { case l: Link => pages get l.target }
+        val companionPage = j.get("companion") map { case l: Link => pages.get(l.target) }
         // Don't map external packages to their parents
         if (ord >= 0 && isPackage && !isPage) None
         // Map auto-generated case class companion objects without a separate page to their classes
@@ -81,7 +88,7 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
         else if ((isDef(j) || isVal(j) || isAliasType(j)) && !isInParent && parentIsTemplate) None
         else j.get("inTemplate") match {
           case Some(Link(target)) =>
-            pages get target orElse (allModels get target flatMap (ch => findPage(target, ch)))
+            pages.get(target).orElse(allModels.get(target).flatMap(ch => findPage(target, ch)))
           case Some(j: JObject) => findPage(-1, j)
           case _ /*None*/ => None
         }
@@ -89,18 +96,18 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
     }
 
     val extra = mutable.Set.empty[Int]
-    allModels foreach { case (ord, j) =>
-      (pages get ord orElse findPage(ord, j) map (_.objects) getOrElse extra) += ord
+    allModels.foreach { case (ord, j) =>
+      pages.get(ord).orElse(findPage(ord, j)).map(_.objects).getOrElse(extra) += ord
     }
 
     println(s"Mapping ${extra.size} extra objects to all pages that need them")
     var extraTotal = 0
 
     def mapExtras(p: Page, j: JBase): Unit = {
-      j foreachRec {
+      j.foreachRec {
         _.links foreach { l =>
-          if (extra contains l.target) {
-            if (!(p.objects contains l.target)) {
+          if (extra.contains(l.target)) {
+            if (!p.objects.contains(l.target)) {
               extraTotal += 1
               p.objects += l.target
               mapExtras(p, allModels(l.target))
@@ -259,7 +266,7 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
         val sortedChildren = tlChildren.sortBy { case (_, j: JObject, kind) =>
           (j.getOrElse("qName", "").toLowerCase, kind)
         }
-        jo.addOpt("e" -> JArray(sortedChildren.map { case (ord, chj, kind) =>
+        jo.addOpt("e", JArray(sortedChildren.map { case (ord, chj, kind) =>
           val ch = new JObject
           ch += "p" -> pages(ord).no
           ch += "k" -> kind.toString

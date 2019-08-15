@@ -1,4 +1,4 @@
-# Extradoc
+# ExtraDoc
 
 A variant of the scala-doc documentation tool that can output JSON format.
 Original code for Scala 2.8 by [Stefan Zeiger](https://github.com/szeiger/extradoc),

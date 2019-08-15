@@ -1,4 +1,11 @@
-package com.novocode.extradoc.json
+/*
+ *  JsonWriter.scala
+ *  (ExtraDoc)
+ *
+ *  This software is published under the BSD 2-clause license
+ */
+
+package de.sciss.extradoc.json
 
 import java.io.{BufferedWriter, FileOutputStream, OutputStreamWriter, File => JFile}
 

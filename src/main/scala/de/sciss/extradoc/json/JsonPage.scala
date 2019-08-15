@@ -1,11 +1,18 @@
-package com.novocode.extradoc.json
+/*
+ *  JsonPage.scala
+ *  (ExtraDoc)
+ *
+ *  This software is published under the BSD 2-clause license
+ */
 
-import com.novocode.extradoc.XmlSupport._
+package de.sciss.extradoc.json
+
+import de.sciss.extradoc.XmlSupport._
 
 import scala.tools.nsc.doc.html
 import scala.tools.nsc.doc.model.TemplateEntity
 
-abstract class HtmlGen extends html.HtmlPage {
+abstract class JsonPage extends html.HtmlPage {
   def path: List[String] = Nil
 
   protected def title: String = ""

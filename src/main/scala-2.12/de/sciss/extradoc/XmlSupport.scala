@@ -1,4 +1,11 @@
-package com.novocode.extradoc
+/*
+ *  XmlSupport.scala
+ *  (ExtraDoc)
+ *
+ *  This software is published under the BSD 2-clause license
+ */
+
+package de.sciss.extradoc
 
 import scala.xml.{NodeSeq, Text, Xhtml}
 

@@ -1,4 +1,4 @@
-lazy val baseName   = "Extradoc"
+lazy val baseName   = "ExtraDoc"
 lazy val baseNameL  = baseName.toLowerCase()
 
 lazy val commonSettings = Seq(
@@ -6,7 +6,7 @@ lazy val commonSettings = Seq(
   organization       := "de.sciss",
   scalaVersion       := "2.12.9",
   description        := "A Scala API doc generator with JSON output",
-  licenses           := Seq("Two-clause BSD-style license" -> url("https://github.com/Sciss/extradoc/blob/master/LICENSE.txt")),
+  licenses           := Seq("Two-clause BSD-style license" -> url("https://github.com/Sciss/extradoc/blob/master/LICENSE")),
   homepage           := Some(url(s"https://github.com/Sciss/$baseNameL")),
   crossScalaVersions := Seq("2.13.0", "2.12.9"),
   scalacOptions     ++= Seq("-deprecation", "-unchecked", "-feature", "-encoding", "utf8", "-Xlint", "-Xsource:2.13")

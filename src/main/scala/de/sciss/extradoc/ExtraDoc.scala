@@ -1,6 +1,6 @@
 /* This source file is based on NSC -- new Scala compiler -- Copyright 2007-2010 LAMP/EPFL */
 
-package com.novocode.extradoc
+package de.sciss.extradoc
 
 import java.io.File
 

@@ -1,4 +1,11 @@
-package com.novocode.extradoc.json
+/*
+ *  JBase.scala
+ *  (ExtraDoc)
+ *
+ *  This software is published under the BSD 2-clause license
+ */
+
+package de.sciss.extradoc.json
 
 import java.io.{StringWriter, Writer}
 
@@ -22,7 +29,7 @@ object CanBeValue {
     def isEmpty(v: Int) = false
 
     def writeValue(v: Int, out: Writer, resolveLink: Link => Any): Unit =
-      out write v.toString
+      out.write(v.toString)
   }
   implicit val stringCanBeValue: CanBeValue[String] = new CanBeValue[String] {
     def isEmpty(v: String): Boolean = v == ""
@@ -59,9 +66,8 @@ sealed abstract class JBase {
 
   def isEmpty: Boolean
 
-  def links: CIterable[Link]
-
-  def children: CIterable[JBase]
+  def links   : CIterable[Link  ]
+  def children: CIterable[JBase ]
 
   def replaceLinks[T: CanBeValue](repl: CMap[Link, T]): Unit
 
@@ -105,8 +111,8 @@ sealed class JObject extends JBase {
   }
 
   /** Adds an entry optionally, if the value is non-empty */
-  def addOpt[V](t: (String, V))(implicit cv: CanBeValue[V]): Unit =
-    if (!cv.isEmpty(t._2)) this += t
+  def addOpt[V](key: String, value: V)(implicit cv: CanBeValue[V]): Unit =
+    if (!cv.isEmpty(value)) this += ((key, value))
 
   def -= (k: String): Option[Any] = m.remove(k)
 
@@ -131,11 +137,10 @@ sealed class JObject extends JBase {
 
   override def hashCode: Int = m.hashCode
 
-  def links: CIterable[Link] = m.values.filter(_.isInstanceOf[Link]).asInstanceOf[CIterable[Link]]
+  def links   : CIterable[Link  ] = m.values.filter(_.isInstanceOf[Link ]).asInstanceOf[CIterable[Link  ]]
+  def children: CIterable[JBase ] = m.values.filter(_.isInstanceOf[JBase]).asInstanceOf[CIterable[JBase ]]
 
-  def children: CIterable[JBase] = m.values.filter(_.isInstanceOf[JBase]).asInstanceOf[CIterable[JBase]]
-
-  def replaceLinks[T: CanBeValue](repl: CMap[Link, T]): Unit = m transform { case (_ /*k*/, v) =>
+  def replaceLinks[T: CanBeValue](repl: CMap[Link, T]): Unit = m.transform { case (_ /*k*/, v) =>
     v match {
       case l: Link => repl.getOrElse(l, l)
       case _ => v
@@ -182,13 +187,13 @@ sealed class JArray extends JBase {
   def isEmpty: Boolean = a.isEmpty
 
   def writeTo(out: Writer, resolveLink: Link => Any): Unit = {
-    out write '['
+    out.write('[')
     var first = true
     for (v <- a) {
-      if (first) first = false else out write ','
+      if (first) first = false else out.write(',')
       CanBeValue.recoverFor(v).writeValue(v, out, resolveLink)
     }
-    out write ']'
+    out.write(']')
   }
 
   override def equals(o: Any): Boolean = o match {
@@ -253,7 +258,6 @@ case class LimitedEquality(j: JBase, keys: String*) {
     case LimitedEquality(o) => LimitedEquality.isEqual(j, o, keys: _*)
     case _ => false
   }
-
 }
 
 object LimitedEquality {

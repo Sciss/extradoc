@@ -1,6 +1,13 @@
-package com.novocode.extradoc.json
+/*
+ *  JsonBuilder.scala
+ *  (ExtraDoc)
+ *
+ *  This software is published under the BSD 2-clause license
+ */
 
-import com.novocode.extradoc.XmlSupport._
+package de.sciss.extradoc.json
+
+import de.sciss.extradoc.XmlSupport._
 
 import scala.collection.{mutable, Map => CMap, Seq => CSeq}
 import scala.language.implicitConversions
@@ -25,7 +32,7 @@ abstract class JsonBuilder { builder =>
   def as[T](o: AnyRef)(f: T => Unit)(implicit m: ClassManifest[T]): Unit =
     if (m.erasure.isInstance(o)) f(o.asInstanceOf[T])
 
-  class CollectingHtmlGen extends HtmlGen {
+  class CollectingJsonPage extends JsonPage {
     val links = new JArray
 
     def ref(e: m.TemplateEntity): String = {
@@ -36,63 +43,61 @@ abstract class JsonBuilder { builder =>
     protected def docletReporter: Reporter = builder.reporter
   }
 
-  def createHtml(f: HtmlGen => Elems): JObject = {
-    val gen = new CollectingHtmlGen
-    val ns = f(gen)
-    val j = new JObject
-    j.addOpt("_links" -> gen.links)
+  def createJson(f: JsonPage => Elems): JObject = {
+    val gen = new CollectingJsonPage
+    val ns  = f(gen)
+    val j   = new JObject
+    j.addOpt("_links", gen.links)
     j += "_html" -> XmlMkString(ns) // gen.mkString(ns)
     j
   }
 
   implicit def nodeSeqFromList(in: CSeq[Node]): NodeSeq = NodeSeq.fromSeq(in)
 
-  def createBody(b: cm.Body): JObject = createHtml(_.bodyToHtml(b))
+  def createBody  (b: cm.Body   ): JObject = createJson(_.bodyToHtml  (b))
+  def createBlock (b: cm.Block  ): JObject = createJson(_.blockToHtml (b))
+  def createInline(i: cm.Inline ): JObject = createJson(_.inlineToHtml(i))
 
-  def createBlock(b: cm.Block): JObject = createHtml(_.blockToHtml(b))
-
-  def createInline(i: cm.Inline): JObject = createHtml(_.inlineToHtml(i))
-
+  /** Returns a tuple consisting of (main-doc, vParams-doc, tParams-doc) */
   def createComment(c: cm.Comment): (JObject, CMap[String, JObject], CMap[String, JObject]) = {
     val j             = new JObject
     val bodyDoc       = createBody(c.body)
-    val bodyIsEmpty   = (bodyDoc.get("_html") getOrElse "") == ""
+    val bodyIsEmpty   = bodyDoc  .get("_html").getOrElse("") == ""
     val shortDoc      = createInline(c.short)
-    val shortIsEmpty  = (shortDoc.get("_html") getOrElse "") == ""
+    val shortIsEmpty  = shortDoc .get("_html").getOrElse("") == ""
 
     if (!shortIsEmpty) j += "short" -> shortDoc
 
-    if (removeSimpleBodyDocs) {
-      val bodyHtml      = bodyDoc .get("_html").getOrElse("").asInstanceOf[String]
-      val shortHtml     = shortDoc.get("_html").getOrElse("").asInstanceOf[String]
+    val skipBody = bodyIsEmpty || (removeSimpleBodyDocs && {
+      val bodyHtml      = bodyDoc .get("_html").getOrElse("")
+      val shortHtml     = shortDoc.get("_html").getOrElse("")
       val bodyIsSimple  = bodyHtml == shortHtml
 
-      if (!bodyIsEmpty && (bodyDoc.get("_links").isDefined || shortDoc.get("_links").isDefined || !bodyIsSimple)) {
-        j += "body" -> bodyDoc
-      }
-    } else if (!bodyIsEmpty) {
+      bodyDoc.get("_links").isEmpty && shortDoc.get("_links").isEmpty && bodyIsSimple
+    })
+    if (!skipBody) {
       j += "body" -> bodyDoc
     }
 
-    j.addOpt("authors" -> JArray(c.authors.map(createBody)))
-    j.addOpt("see"     -> JArray(c.see    .map(createBody)))
+    j.addOpt("authors", JArray(c.authors.map(createBody)))
+    j.addOpt("see"    , JArray(c.see    .map(createBody)))
 
-    c.result.foreach { b => j addOpt "result" -> createBody(b) }
+    c.result.foreach(b => j.addOpt("result", createBody(b)))
 
-    j.addOpt("throws"  -> JObject(c.throws.map { case (k, v) => k -> createBody(v) }))
+    j.addOpt("throws", JObject(c.throws.map { case (k, v) => k -> createBody(v) }))
 
     val vParams = c.valueParams .map { case (k, v) => k -> createBody(v) }
     val tParams = c.typeParams  .map { case (k, v) => k -> createBody(v) }
 
-    c.version .foreach { b => j.addOpt("version" -> createBody(b)) }
-    c.since   .foreach { b => j.addOpt("since"   -> createBody(b)) }
+    c.version.foreach(b => j.addOpt("version", createBody(b)))
+    c.since  .foreach(b => j.addOpt("since"  , createBody(b)))
 
-    j.addOpt("todo" -> JArray(c.todo.map(createBody)))
+    j.addOpt("todo"   , JArray(c.todo.map(createBody)))
 
-    c.deprecated .foreach { b => j addOpt "deprecated" -> createBody(b) }
+    c.deprecated .foreach(b => j.addOpt("deprecated", createBody(b)))
 
-    j.addOpt("note"    -> JArray(c.note    .map(createBody)))
-    j.addOpt("example" -> JArray(c.example .map(createBody)))
+    j.addOpt("note"   , JArray(c.note    .map(createBody)))
+    j.addOpt("example", JArray(c.example .map(createBody)))
 
     (j, vParams, tParams)
   }
@@ -113,10 +118,10 @@ abstract class JsonBuilder { builder =>
       }
       if (pos < name.length) b += Text(name.substring(pos))
       j += "_xname" -> Xhtml.toXhtml(b)
-      j.addOpt("_refs" -> JArray(links))
+      j.addOpt("_refs", JArray(links))
     } else {
       j += "name" -> t.name
-      j.addOpt("refEntity" -> JArray(t.refEntity.map {
+      j.addOpt("refEntity", JArray(t.refEntity.map {
         case (k, v) =>
           val vv = new JObject
           vv += "s" -> k
@@ -174,19 +179,19 @@ abstract class JsonBuilder { builder =>
     var vParams: CMap[String, JObject] = CMap.empty
     var tParams: CMap[String, JObject] = CMap.empty
 
-    as[m.MemberEntity](e) { m =>
-      m.comment.foreach { c =>
+    as[m.MemberEntity](e) { me =>
+      me.comment.foreach { c =>
         val (comment, v, t) = createComment(c)
         j += "comment" -> comment
         vParams = v
         tParams = t
       }
       if (compactFlags) {
-        if (m.visibility.isProtected) set(j, 'o')
-        if (m.visibility.isPublic   ) set(j, 'u')
+        if (me.visibility.isProtected) set(j, 'o')
+        if (me.visibility.isPublic   ) set(j, 'u')
       } else {
-        if (m.visibility.isProtected) j += "isProtected"  -> true
-        if (m.visibility.isPublic   ) j += "isPublic"     -> true
+        if (me.visibility.isProtected) j += "isProtected"  -> true
+        if (me.visibility.isPublic   ) j += "isPublic"     -> true
       }
 
       // XXX TODO: owner is `Option[Entity] in 2.12, and `Entity` in 2.13
@@ -225,18 +230,18 @@ abstract class JsonBuilder { builder =>
 //        } else
         {
           // filter out inTemplate
-          j.addOpt("alsoIn" ->
-            JArray(m.inDefinitionTemplates.filter(_ != m.inTemplate).map(e => global(e)(createEntity)))
+          j.addOpt("alsoIn",
+            JArray(me.inDefinitionTemplates.filter(_ != me.inTemplate).map(e => global(e)(createEntity)))
           )
         }
         // definitionName is always identical to qName, so leave it out
       } else {
         // XXX TODO
 //        j addOpt "inheritedFrom" -> JArray(m.inheritedFrom.map(e => global(e)(createEntity)))
-        j.addOpt("definitionName" -> m.definitionName)
+        j.addOpt("definitionName", me.definitionName)
       }
 
-      m.flags.map(createBlock).foreach { fj =>
+      me.flags.map(createBlock).foreach { fj =>
         fj.get("_html") match {
           case Some("<p>sealed</p>") =>
             if (compactFlags) set(j, 's') else j += "isSealed"    -> true
@@ -248,42 +253,42 @@ abstract class JsonBuilder { builder =>
         }
       }
 
-      m.deprecation .foreach { d => j += "deprecation" -> createBody(d) }
+      me.deprecation .foreach { d => j += "deprecation" -> createBody(d) }
 
-      if (!m.isAliasType && !isPackageOrClassOrTraitOrObject) {
-        j += "resultType" -> createTypeEntity(m.resultType)
+      if (!me.isAliasType && !isPackageOrClassOrTraitOrObject) {
+        j += "resultType" -> createTypeEntity(me.resultType)
       }
 
       if (compactFlags) {
-        if (m.isDef         ) set(j, 'd')
-        if (m.isVal         ) set(j, 'v')
-        if (m.isLazyVal     ) set(j, 'l')
-        if (m.isVar         ) set(j, 'V')
+        if (me.isDef         ) set(j, 'd')
+        if (me.isVal         ) set(j, 'v')
+        if (me.isLazyVal     ) set(j, 'l')
+        if (me.isVar         ) set(j, 'V')
         // XXX TODO
 //        if (m.isImplicit    ) set(j, 'm')
-        if (m.isConstructor ) set(j, 'n')
-        if (m.isAliasType   ) set(j, 'a')
-        if (m.isAbstractType) set(j, 'A')
+        if (me.isConstructor ) set(j, 'n')
+        if (me.isAliasType   ) set(j, 'a')
+        if (me.isAbstractType) set(j, 'A')
         // XXX TODO
 //        if (m.isTemplate    ) set(j, 'M')
       } else {
-        if (m.isDef         ) j += "isDef"          -> true
-        if (m.isVal         ) j += "isVal"          -> true
-        if (m.isLazyVal     ) j += "isLazyVal"      -> true
-        if (m.isVar         ) j += "isVar"          -> true
+        if (me.isDef         ) j += "isDef"          -> true
+        if (me.isVal         ) j += "isVal"          -> true
+        if (me.isLazyVal     ) j += "isLazyVal"      -> true
+        if (me.isVar         ) j += "isVar"          -> true
         // XXX TODO
 //        if (m.isImplicit    ) j += "isImplicit"     -> true
-        if (m.isConstructor ) j += "isConstructor"  -> true
-        if (m.isAliasType   ) j += "isAliasType"    -> true
-        if (m.isAbstractType) j += "isAbstractType" -> true
+        if (me.isConstructor ) j += "isConstructor"  -> true
+        if (me.isAliasType   ) j += "isAliasType"    -> true
+        if (me.isAbstractType) j += "isAbstractType" -> true
         // XXX TODO
 //        if (m.isTemplate    ) j += "isTemplate"     -> true
       }
     } // as[MemberEntity](e)
 
     as[m.DocTemplateEntity](e) { t =>
-      t.sourceUrl.foreach(u => j.addOpt("sourceUrl" -> u.toString))
-      j.addOpt("typeParams" -> createTypeParams(t.typeParams, tParams))
+      t.sourceUrl.foreach(u => j.addOpt("sourceUrl", u.toString))
+      j.addOpt("typeParams", createTypeParams(t.typeParams, tParams))
 //      t.parentType .foreach { p => j += "parentType" -> createTypeEntity(p) }
       t.parentTypes.foreach { case (_ /*pTemp*/, pType) =>
         j += "parentType" -> createTypeEntity(pType)  // XXX TODO correct?
@@ -293,14 +298,14 @@ abstract class JsonBuilder { builder =>
       //j addOpt "parentTemplates" -> JArray(t.parentTemplates.map(e => global(e)(createEntity _)))
 
 //      j addOpt "linearization" -> JArray(t.linearization .map(e => global(e)(createEntity)))
-      j.addOpt("linearization" -> JArray(t.linearizationTypes .map(e => global(e)(createEntity))))  // XXX  TODO correct?
+      j.addOpt("linearization", JArray(t.linearizationTypes .map(e => global(e)(createEntity))))  // XXX  TODO correct?
 
 //      j addOpt "subClasses"    -> JArray(t.subClasses    .map(e => global(e)(createEntity)))
       // HH
-      j.addOpt("subClasses"    -> JArray(t.directSubClasses.map(e => global(e)(createEntity))))
+      j.addOpt("subClasses", JArray(t.directSubClasses.map(e => global(e)(createEntity))))
 
       // "members" is constructors + templates + methods + values + abstractTypes + aliasTypes + packages
-      j.addOpt("members" -> JArray(t.members.map(e => global(e)(createEntity))))
+      j.addOpt("members", JArray(t.members.map(e => global(e)(createEntity))))
 
       //j addOpt "templates" -> JArray(t.templates.map(e => global(e)(createEntity _)))
       //j addOpt "methods" -> JArray(t.methods.map(e => global(e)(createEntity _)))
@@ -312,7 +317,7 @@ abstract class JsonBuilder { builder =>
     }
 
     as[m.Trait](e) { t =>
-      j.addOpt("valueParams" -> createValueParams(t.valueParams, vParams))
+      j.addOpt("valueParams", createValueParams(t.valueParams, vParams))
     }
 
     as[m.Class](e) { c =>
@@ -332,8 +337,8 @@ abstract class JsonBuilder { builder =>
     }
 
     as[m.Def](e) { d =>
-      j.addOpt("typeParams"   -> createTypeParams (d.typeParams , tParams))
-      j.addOpt("valueParams"  -> createValueParams(d.valueParams, vParams))
+      j.addOpt("typeParams" , createTypeParams (d.typeParams , tParams))
+      j.addOpt("valueParams", createValueParams(d.valueParams, vParams))
     }
 
     as[m.Constructor](e) { c =>
@@ -341,15 +346,17 @@ abstract class JsonBuilder { builder =>
         if (compactFlags) set(j, 'P')
         else j += "isPrimary" -> true
       }
-      j.addOpt("valueParams" -> createValueParams(c.valueParams, vParams))
+      j.addOpt("valueParams", createValueParams(c.valueParams, vParams))
     }
 
     as[m.AbstractType](e) { a =>
-      a.lo.foreach { t => j.addOpt("lo" -> createTypeEntity(t)) }
-      a.hi.foreach { t => j.addOpt("hi" -> createTypeEntity(t)) }
+      a.lo.foreach(t => j.addOpt("lo", createTypeEntity(t)))
+      a.hi.foreach(t => j.addOpt("hi", createTypeEntity(t)))
     }
 
-    as[m.AliasType](e) { a => j += "alias" -> createTypeEntity(a.alias) }
+    as[m.AliasType](e) { a =>
+      j += "alias" -> createTypeEntity(a.alias)
+    }
 
 //    as[ParameterEntity](e) { p =>
 //      if (!compactFlags) {
@@ -374,19 +381,17 @@ abstract class JsonBuilder { builder =>
     }
 
     as[m.TypeParam](e) { t =>
-      j.addOpt("variance" -> t.variance)
-      t.lo.foreach { t => j.addOpt("lo" -> createTypeEntity(t)) }
-      t.hi.foreach { t => j.addOpt("hi" -> createTypeEntity(t)) }
+      j.addOpt("variance", t.variance)
+      t.lo.foreach(t => j.addOpt("lo", createTypeEntity(t)))
+      t.hi.foreach(t => j.addOpt("hi", createTypeEntity(t)))
     }
 
     as[m.ValueParam](e) { v =>
       j += "resultType" -> createTypeEntity(v.resultType)
 
-      // XXX TODO : look at the tree `s`
-
-//      v.defaultValue.foreach { s =>
-//        j += "defaultValue" -> s
-//      }
+      v.defaultValue.foreach { s =>
+        j += "defaultValue" -> s.expression // XXX TODO correct?
+      }
       if (v.isImplicit) {
         if (compactFlags) set(j, 'm')
         else j += "isImplicit" -> true
@@ -416,32 +421,33 @@ abstract class JsonBuilder { builder =>
   }
 
   /**
-   * Set a flag in the "is" field.
-   * o: isProtected
-   * u: isPublic
-   * p: isPackage
-   * r: isRootPackage
-   * t: isTrait
-   * c: isClass
-   * b: isObject
-   * D: isDocTemplate
-   * d: isDef
-   * v: isVal
-   * l: isLazyVal
-   * V: isVar
-   * m: isImplicit
-   * n: isConstructor
-   * a: isAliasType
-   * A: isAbstractType
-   * M: isTemplate
-   * C: isCaseClass
-   * U: isUseCase
-   * P: isPrimary
-   * s: isSealed
-   * B: isAbstract
-   * f: isFinal
+   * Sets a flag in the "is" field.
+   *
+   *  - o: isProtected
+   *  - u: isPublic
+   *  - p: isPackage
+   *  - r: isRootPackage
+   *  - t: isTrait
+   *  - c: isClass
+   *  - b: isObject
+   *  - D: isDocTemplate
+   *  - d: isDef
+   *  - v: isVal
+   *  - l: isLazyVal
+   *  - V: isVar
+   *  - m: isImplicit
+   *  - n: isConstructor
+   *  - a: isAliasType
+   *  - A: isAbstractType
+   *  - M: isTemplate
+   *  - C: isCaseClass
+   *  - U: isUseCase
+   *  - P: isPrimary
+   *  - s: isSealed
+   *  - B: isAbstract
+   *  - f: isFinal
    */
   def set(j: JObject, flag: Char): Unit = {
-    j += "is" -> ((j.get("is") getOrElse "") + flag.toString)
+    j += "is" -> (j.get("is").getOrElse("") + flag.toString)
   }
 }
