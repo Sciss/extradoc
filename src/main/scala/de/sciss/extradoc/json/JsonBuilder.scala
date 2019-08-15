@@ -33,6 +33,9 @@ abstract class JsonBuilder { builder =>
   def as[T](o: AnyRef)(f: T => Unit)(implicit m: ClassManifest[T]): Unit =
     if (m.erasure.isInstance(o)) f(o.asInstanceOf[T])
 
+  def asOrElse[T](o: AnyRef)(f: T => Unit)(e: => Unit)(implicit m: ClassManifest[T]): Unit =
+    if (m.erasure.isInstance(o)) f(o.asInstanceOf[T]) else e
+
   class CollectingJsonPage extends JsonPage {
     val links = new JArray
 
@@ -110,7 +113,7 @@ abstract class JsonBuilder { builder =>
       val links = mutable.Buffer.empty[Link]
       val name  = t.name
       var pos   = 0
-      t.refEntity .foreach { case (start, (ref, len)) =>
+      t.refEntity.foreach { case (start, (ref, len)) =>
         if (pos < start) b += Text(name.substring(pos, start))
         links += global(ref)(createEntity _)
         b += Elem(null, "a", xml.Null, xml.TopScope, minimizeEmpty = false, 
@@ -123,11 +126,11 @@ abstract class JsonBuilder { builder =>
     } else {
       j += "name" -> t.name
       j.addOpt("refEntity", JArray(t.refEntity.map {
-        case (k, v) =>
+        case (start, (ref, len)) =>
           val vv = new JObject
-          vv += "s" -> k
-          vv += "l" -> v._2
-          vv += "e" -> global(v._1)(createEntity _)
+          vv += "s" -> start
+          vv += "l" -> len
+          vv += "e" -> global(ref)(createEntity _)
           vv
       }))
     }
@@ -210,26 +213,26 @@ abstract class JsonBuilder { builder =>
 //      }
 
       if (mergeInheritedMembers) {
-        // XXX TODO
-
-//        if (!m.inheritedFrom.isEmpty) {
-//          /* Remove "inheritedFrom", replace "inTemplate" with first from
-//             "inDefinitionTemplates" and replace "qName" with "definitionName"
-//             to make this inherited member definition identical to the original
-//             one so it can be compacted away and remapped to the correct
-//             page. */
-//          val originalOwnerLink = global(m.inDefinitionTemplates.head)(createEntity)
-//          j += "inTemplate" -> originalOwnerLink
-//          j += "qName" -> m.definitionName
-//          /* If the member is visible in its inTemplate, it must have been
-//             inDefinitionTemplates.first at the point of its definition, so we
-//             rewrite it that way. */
-//          if (j("visibleIn", Link(-1)).target != -1)
-//            j += "visibleIn" -> originalOwnerLink
-//          // inDefinitionTemplate.head has already become inTemplate
-//          j addOpt "alsoIn" -> JArray(m.inDefinitionTemplates.tail.map(e => global(e)(createEntity)))
-//        } else
-        {
+        // XXX TODO --- is this equivalent? or do we need to further check mte.parentTypes?
+//        if (!me.inheritedFrom.isEmpty)
+        asOrElse[MemberTemplateEntity](me) { _ =>
+          /* Remove "inheritedFrom", replace "inTemplate" with first from
+             "inDefinitionTemplates" and replace "qName" with "definitionName"
+             to make this inherited member definition identical to the original
+             one so it can be compacted away and remapped to the correct
+             page. */
+          val originalOwnerLink = global(me.inDefinitionTemplates.head)(createEntity _)
+          j += "inTemplate" -> originalOwnerLink
+          j += "qName"      -> me.definitionName
+          /* If the member is visible in its inTemplate, it must have been
+             inDefinitionTemplates.first at the point of its definition, so we
+             rewrite it that way. */
+          if (j.getOrElse("visibleIn", Link(-1)).target != -1) {
+            j += "visibleIn" -> originalOwnerLink
+          }
+          // inDefinitionTemplate.head has already become inTemplate
+          j.addOpt("alsoIn", JArray(me.inDefinitionTemplates.tail.map(e => global(e)(createEntity))))
+        } /*else*/ {
           // filter out inTemplate
           j.addOpt("alsoIn",
             JArray(me.inDefinitionTemplates.filter(_ != me.inTemplate).map(e => global(e)(createEntity)))
@@ -237,8 +240,13 @@ abstract class JsonBuilder { builder =>
         }
         // definitionName is always identical to qName, so leave it out
       } else {
-        // XXX TODO
-//        j addOpt "inheritedFrom" -> JArray(m.inheritedFrom.map(e => global(e)(createEntity)))
+        // HH
+        as[MemberTemplateEntity](me) { mte =>
+          j.addOpt("inheritedFrom", JArray(mte.parentTypes.map { case (eTmp, eTpe) =>
+            global(eTpe)(createEntity _)
+          }))
+        }
+//        j.addOpt("inheritedFrom", JArray(me.inheritedFrom.map(e => global(e)(createEntity))))
         j.addOpt("definitionName", me.definitionName)
       }
 
@@ -303,7 +311,7 @@ abstract class JsonBuilder { builder =>
       //j addOpt "parentTemplates" -> JArray(t.parentTemplates.map(e => global(e)(createEntity _)))
 
 //      j addOpt "linearization" -> JArray(t.linearization .map(e => global(e)(createEntity)))
-      j.addOpt("linearization", JArray(t.linearizationTypes .map(e => global(e)(createEntity))))  // XXX  TODO correct?
+      j.addOpt("linearization", JArray(t.linearizationTemplates.map(e => global(e)(createEntity))))  // XXX TODO correct?
 
 //      j addOpt "subClasses"    -> JArray(t.subClasses    .map(e => global(e)(createEntity)))
       // HH
@@ -312,11 +320,11 @@ abstract class JsonBuilder { builder =>
       // "members" is constructors + templates + methods + values + abstractTypes + aliasTypes + packages
       j.addOpt("members", JArray(t.members.map(e => global(e)(createEntity))))
 
-      //j addOpt "templates" -> JArray(t.templates.map(e => global(e)(createEntity _)))
-      //j addOpt "methods" -> JArray(t.methods.map(e => global(e)(createEntity _)))
-      //j addOpt "values" -> JArray(t.values.map(e => global(e)(createEntity _)))
-      //j addOpt "abstractTypes" -> JArray(t.abstractTypes.map(e => global(e)(createEntity _)))
-      //j addOpt "aliasTypes" -> JArray(t.aliasTypes.map(e => global(e)(createEntity _)))
+//      j.addOpt("templates", JArray(t.templates.map(e => global(e)(createEntity _))))
+//      j.addOpt("methods", JArray(t.methods.map(e => global(e)(createEntity _))))
+//      j.addOpt("values", JArray(t.values.map(e => global(e)(createEntity _))))
+//      j.addOpt("abstractTypes", JArray(t.abstractTypes.map(e => global(e)(createEntity _))))
+//      j.addOpt("aliasTypes", JArray(t.aliasTypes.map(e => global(e)(createEntity _))))
 
       t.companion .foreach { p => j += "companion" -> global(p)(createEntity) }
     }
