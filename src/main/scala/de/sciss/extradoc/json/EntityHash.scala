@@ -7,6 +7,7 @@
 
 package de.sciss.extradoc.json
 
+import scala.tools.nsc.doc.base.{LinkToMember, LinkToTpl}
 import scala.tools.nsc.doc.model.NoDocTemplate
 
 final case class EntityHash[+E <: AnyRef /*Entity*/](e: E) extends Function0[E] {
@@ -26,6 +27,13 @@ final case class EntityHash[+E <: AnyRef /*Entity*/](e: E) extends Function0[E] 
           (t1.isClass       == t2.isClass)        &&
           (t1.isObject      == t2.isObject)       &&
           (t1.qualifiedName == t2.qualifiedName)
+
+//      case (LinkToTpl(a), b) if a == b => true
+//      case (a, LinkToTpl(b)) if a == b => true
+//
+//      case (LinkToMember(_, a), b) if a == b => true
+//      case (a, LinkToMember(_, b)) if a == b => true
+
       case _ => false
     }
     case _ => false

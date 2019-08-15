@@ -28,19 +28,28 @@ object EntityView {
 
   implicit object linkTo extends EntityView[LinkTo] {
     def nameOption  (peer: LinkTo): Option[String] = peer match {
-      case LinkToMember     (m: Entity, _)  => Some(m.name)
+      case LinkToMember     (m: Entity, t: Entity)  =>
+//        if (!t.isInstanceOf[Entity]) println(s"Not an entity: $t")
+        // XXX TODO which one?
+        Some(m.name)
+//        Some(t.name)
       case LinkToTpl        (t: Entity)     => Some(t.name)
       case LinkToExternalTpl(name, _, _)    => Option(name)
-      case Tooltip          (name)          => Option(name)
+//      case Tooltip          (name)          => Option(name)
       case _ =>
-        println(s"linkTo.nameOption unclear: $peer")
+//        println(s"linkTo.nameOption unclear: $peer")
         None
     }
 
     def qNameOption (peer: LinkTo): Option[String] = peer match {
-      case LinkToMember     (m: Entity, _)  => Some(m.qualifiedName)
+      case LinkToMember     (m: Entity, t: Entity) =>
+        // XXX TODO which one?
+        Some(m.qualifiedName)
+//        Some(t.qualifiedName)
       case LinkToTpl        (t: Entity)     => Some(t.qualifiedName)
-      case _ => None
+      case _ =>
+//        println(s"linkTo.qNameOption unclear: $peer")
+        None
     }
   }
 }

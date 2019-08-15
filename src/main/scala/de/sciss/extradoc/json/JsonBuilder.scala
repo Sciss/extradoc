@@ -13,7 +13,7 @@ import scala.collection.{mutable, Map => CMap, Seq => CSeq}
 import scala.language.implicitConversions
 import scala.reflect.ClassManifest
 import scala.reflect.internal.Reporter
-import scala.tools.nsc.doc.base.{comment => cm}
+import scala.tools.nsc.doc.base.{LinkToMember, LinkToTpl, comment => cm}
 import scala.tools.nsc.doc.model.MemberTemplateEntity
 import scala.tools.nsc.doc.{model => m}
 import scala.xml.{Elem, Node, NodeBuffer, NodeSeq, Text, Xhtml}
@@ -113,12 +113,21 @@ abstract class JsonBuilder { builder =>
       val links = mutable.Buffer.empty[Link]
       val name  = t.name
       var pos   = 0
-      t.refEntity.foreach { case (start, (ref, len)) =>
-        if (pos < start) b += Text(name.substring(pos, start))
-        links += global(ref)(createEntity _)
-        b += Elem(null, "a", xml.Null, xml.TopScope, minimizeEmpty = false, 
-          child = Text(name.substring(start, start + len)))
-        pos = start + len
+      t.refEntity.foreach { case (start, (ref0, len)) =>
+        def perform[E <: AnyRef : EntityView](ref: E): Unit = {
+          if (pos < start) b += Text(name.substring(pos, start))
+          links += global(ref)(createEntity _)
+          b += Elem(null, "a", xml.Null, xml.TopScope, minimizeEmpty = false,
+            child = Text(name.substring(start, start + len)))
+          pos = start + len
+        }
+        ref0 match {
+          case LinkToTpl    (tpl: m.Entity)   => perform(tpl)
+          case LinkToMember (m: m.Entity, _ /*t*/)  =>
+//            println(s"LinkToMember($m, $t)")
+            perform(m)
+          case _                              => perform(ref0)
+        }
       }
       if (pos < name.length) b += Text(name.substring(pos))
       j += "_xname" -> Xhtml.toXhtml(b)

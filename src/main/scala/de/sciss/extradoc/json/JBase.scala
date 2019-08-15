@@ -142,8 +142,8 @@ sealed class JObject extends JBase {
 
   def replaceLinks[T: CanBeValue](repl: CMap[Link, T]): Unit = m.transform { case (_ /*k*/, v) =>
     v match {
-      case l: Link => repl.getOrElse(l, l)
-      case _ => v
+      case l: Link  => repl.getOrElse(l, l)
+      case _        => v
     }
   }
 

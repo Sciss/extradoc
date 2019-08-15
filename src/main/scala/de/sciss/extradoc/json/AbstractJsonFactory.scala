@@ -11,6 +11,7 @@ import java.io.{InputStream, File => JFile}
 
 import scala.collection.mutable
 import scala.tools.nsc.doc
+import scala.tools.nsc.doc.base.{LinkTo, Tooltip}
 import scala.tools.nsc.io.{Directory, Streamable}
 import scala.tools.nsc.reporters.Reporter
 
@@ -60,7 +61,8 @@ abstract class AbstractJsonFactory(val universe: doc.Universe, val reporter: Rep
 
       val reporter: Reporter  = self.reporter
 
-      def global[E <: AnyRef](e: E)(f: E => JObject)(implicit view: EntityView[E]): Link =
+      def global[E <: AnyRef](e: E)(f: E => JObject)(implicit view: EntityView[E]): Link = {
+//        require (!e.isInstanceOf[LinkTo] || e.isInstanceOf[Tooltip], e)
         globalEntityOrdinals.get(EntityHash(e)) match {
           case Some(ord) => Link(ord)
           case None =>
@@ -85,6 +87,7 @@ abstract class AbstractJsonFactory(val universe: doc.Universe, val reporter: Rep
               Link(ord)
             }
         }
+      }
     }
     builder.global(universe.rootPackage)(builder.createEntity)
     println(s"Built ${allModels.size} global objects (${allModelsReverse.size} unique)")
@@ -141,9 +144,7 @@ abstract class AbstractJsonFactory(val universe: doc.Universe, val reporter: Rep
     def simple(l: Int): Option[String] = {
       val j = allModels(l)
       if ((j.keys.toSet -- Set("name", "qName")).isEmpty)
-        nameFor(j) filter {
-          _.length < 7
-        }
+        nameFor(j).filter(_.length < 7)
       else None
     }
 
@@ -152,14 +153,15 @@ abstract class AbstractJsonFactory(val universe: doc.Universe, val reporter: Rep
         case (_, l@Link(t)) => simple(t).getOrElse(l)
         case (_, o) => o
       }
-      /* j("valueParams", JArray.Empty).values foreach {
-        case a: JArray =>
-          a transform {
-            case (_, l @ Link(t)) => simple(t) getOrElse l
-            case (_, o) => o
-          }
-        case _ =>
-      } */
+
+//      j.getOrElse("valueParams", JArray.Empty).values.foreach {
+//        case a: JArray =>
+//          a.transform {
+//            case (_, l @ Link(t)) => simple(t).getOrElse(l)
+//            case (_, o) => o
+//          }
+//        case _ =>
+//      }
     }
     allModelsReverse.clear()
     for ((ord, j) <- allModels) allModelsReverse += j -> ord
