@@ -148,6 +148,7 @@ abstract class JsonBuilder { builder =>
 
   def createEntity[E <: AnyRef](e: E)(implicit view: EntityView[E]): JObject = {
     val j = new JObject
+
 //    j += "inTemplate" -> global(e.inTemplate)(createEntity _)
     e match { // HH
       case e1: m.Entity => j += "inTemplate" -> global(e1.inTemplate)(createEntity _)
@@ -166,9 +167,10 @@ abstract class JsonBuilder { builder =>
       j += "qName" -> qName
     }
     if (name ne null) j += "name" -> name
-    var isPackageOrClassOrTraitOrObject = false
-    var isClassOrTrait = false
 
+    var isPackageOrClassOrTraitOrObject = false
+    var isClassOrTrait                  = false
+    
     as[m.TemplateEntity](e) { t =>
       isPackageOrClassOrTraitOrObject = t.isPackage || t.isClass || t.isTrait || t.isObject || t.isRootPackage
       isClassOrTrait = t.isClass || t.isTrait
@@ -251,7 +253,7 @@ abstract class JsonBuilder { builder =>
       } else {
         // HH
         as[MemberTemplateEntity](me) { mte =>
-          j.addOpt("inheritedFrom", JArray(mte.parentTypes.map { case (eTmp, eTpe) =>
+          j.addOpt("inheritedFrom", JArray(mte.parentTypes.map { case (_ /*eTmp*/, eTpe) =>
             global(eTpe)(createEntity _)
           }))
         }
@@ -327,7 +329,8 @@ abstract class JsonBuilder { builder =>
       j.addOpt("subClasses", JArray(t.directSubClasses.map(e => global(e)(createEntity))))
 
       // "members" is constructors + templates + methods + values + abstractTypes + aliasTypes + packages
-      j.addOpt("members", JArray(t.members.map(e => global(e)(createEntity))))
+      val members = t.members // .filter(m => m.visibility.isProtected || m.visibility.isPublic)
+      j.addOpt("members", JArray(members.map(e => global(e)(createEntity))))
 
 //      j.addOpt("templates", JArray(t.templates.map(e => global(e)(createEntity _))))
 //      j.addOpt("methods", JArray(t.methods.map(e => global(e)(createEntity _))))
@@ -335,7 +338,7 @@ abstract class JsonBuilder { builder =>
 //      j.addOpt("abstractTypes", JArray(t.abstractTypes.map(e => global(e)(createEntity _))))
 //      j.addOpt("aliasTypes", JArray(t.aliasTypes.map(e => global(e)(createEntity _))))
 
-      t.companion .foreach { p => j += "companion" -> global(p)(createEntity) }
+      t.companion.foreach { p => j += "companion" -> global(p)(createEntity) }
     }
 
     as[m.Trait](e) { t =>
