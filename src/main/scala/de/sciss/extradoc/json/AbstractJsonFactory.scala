@@ -243,8 +243,9 @@ abstract class AbstractJsonFactory(val universe: doc.Universe, val reporter: Rep
 
   def copyResource(resPath: String, subPath: String): Unit = {
     val bytes = new Streamable.Bytes {
-      val inputStream: InputStream = getClass.getResourceAsStream(s"$resPath/$subPath")
-      assert(inputStream != null)
+      val path = s"$resPath/$subPath"
+      val inputStream: InputStream = getClass.getResourceAsStream(path)
+      assert(inputStream != null, path)
     }.toByteArray
     val dest = Directory(siteRoot) / subPath
     dest.parent.createDirectory()

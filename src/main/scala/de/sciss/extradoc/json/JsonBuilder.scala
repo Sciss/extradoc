@@ -14,6 +14,7 @@ import scala.language.implicitConversions
 import scala.reflect.ClassManifest
 import scala.reflect.internal.Reporter
 import scala.tools.nsc.doc.base.{comment => cm}
+import scala.tools.nsc.doc.model.MemberTemplateEntity
 import scala.tools.nsc.doc.{model => m}
 import scala.xml.{Elem, Node, NodeBuffer, NodeSeq, Text, Xhtml}
 
@@ -253,36 +254,40 @@ abstract class JsonBuilder { builder =>
         }
       }
 
-      me.deprecation .foreach { d => j += "deprecation" -> createBody(d) }
+      me.deprecation.foreach { d => j += "deprecation" -> createBody(d) }
 
       if (!me.isAliasType && !isPackageOrClassOrTraitOrObject) {
         j += "resultType" -> createTypeEntity(me.resultType)
       }
 
+      val isTemplate = me.isInstanceOf[MemberTemplateEntity]
+
       if (compactFlags) {
-        if (me.isDef         ) set(j, 'd')
-        if (me.isVal         ) set(j, 'v')
-        if (me.isLazyVal     ) set(j, 'l')
-        if (me.isVar         ) set(j, 'V')
+        if (me.isDef          ) set(j, 'd')
+        if (me.isVal          ) set(j, 'v')
+        if (me.isLazyVal      ) set(j, 'l')
+        if (me.isVar          ) set(j, 'V')
         // XXX TODO
 //        if (m.isImplicit    ) set(j, 'm')
-        if (me.isConstructor ) set(j, 'n')
-        if (me.isAliasType   ) set(j, 'a')
-        if (me.isAbstractType) set(j, 'A')
-        // XXX TODO
+        if (me.isConstructor  ) set(j, 'n')
+        if (me.isAliasType    ) set(j, 'a')
+        if (me.isAbstractType ) set(j, 'A')
+        // HH
 //        if (m.isTemplate    ) set(j, 'M')
+        if (isTemplate        ) set(j, 'M')
       } else {
-        if (me.isDef         ) j += "isDef"          -> true
-        if (me.isVal         ) j += "isVal"          -> true
-        if (me.isLazyVal     ) j += "isLazyVal"      -> true
-        if (me.isVar         ) j += "isVar"          -> true
+        if (me.isDef          ) j += "isDef"          -> true
+        if (me.isVal          ) j += "isVal"          -> true
+        if (me.isLazyVal      ) j += "isLazyVal"      -> true
+        if (me.isVar          ) j += "isVar"          -> true
         // XXX TODO
 //        if (m.isImplicit    ) j += "isImplicit"     -> true
-        if (me.isConstructor ) j += "isConstructor"  -> true
-        if (me.isAliasType   ) j += "isAliasType"    -> true
-        if (me.isAbstractType) j += "isAbstractType" -> true
-        // XXX TODO
+        if (me.isConstructor  ) j += "isConstructor"  -> true
+        if (me.isAliasType    ) j += "isAliasType"    -> true
+        if (me.isAbstractType ) j += "isAbstractType" -> true
+        // HH
 //        if (m.isTemplate    ) j += "isTemplate"     -> true
+        if (isTemplate        ) j += "isTemplate"     -> true
       }
     } // as[MemberEntity](e)
 

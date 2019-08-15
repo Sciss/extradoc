@@ -7,7 +7,7 @@
 
 package de.sciss.extradoc.json
 
-import scala.collection.{mutable, Map => CMap}
+import scala.collection.mutable
 import scala.tools.nsc.doc
 import scala.tools.nsc.reporters.Reporter
 
@@ -27,13 +27,13 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
     val objects   : mutable.Set   [Int] = mutable.Set   .empty
     val renumbered: mutable.Buffer[Int] = mutable.Buffer.empty
 
-    lazy val renumberedMap: CMap[Int, Int] =
+    lazy val renumberedMap: Map[Int, Int] =
       renumbered.zipWithIndex.toMap // don't access until "renumbered" is stable
   }
 
   def generate(): Unit = {
     if (explorer) {
-      val p = "/com/novocode/extradoc/explorer"
+      val p = "/de/sciss/extradoc/explorer"
       copyResource(p, "index.html")
       copyResource(p, "css/extradoc.css")
       copyResource(p, "js/cache.js")
@@ -201,9 +201,9 @@ class JsonMultiFactory(universe: doc.Universe, reporter: Reporter, explorer: Boo
     println(s"Writing p0.json to p${pages.size - 1}.json")
     val globalNames = mutable.Map.empty[String, String]
 
-    def convertLink(p: Page)(l: Link): Unit = {
-      val localIdx: Option[Int] = p.renumberedMap get l.target
-      val localOrParentIdx: Option[Any] = localIdx orElse {
+    def convertLink(p: Page)(l: Link): Any = {
+      val localIdx        : Option[Int] = p.renumberedMap.get(l.target)
+      val localOrParentIdx: Option[Any] = localIdx.orElse {
         val lin = allModels(p.main).getOrElse("linearization", JArray.Empty).values
         val parentIdx = lin.toSeq.view flatMap {
           case Link(t2) =>
