@@ -148,7 +148,7 @@ abstract class JsonBuilder { builder =>
 
   def createEntity[E <: AnyRef](e: E)(implicit view: EntityView[E]): JObject = {
     val j = new JObject
-
+    
 //    j += "inTemplate" -> global(e.inTemplate)(createEntity _)
     e match { // HH
       case e1: m.Entity => j += "inTemplate" -> global(e1.inTemplate)(createEntity _)
@@ -170,7 +170,7 @@ abstract class JsonBuilder { builder =>
 
     var isPackageOrClassOrTraitOrObject = false
     var isClassOrTrait                  = false
-    
+
     as[m.TemplateEntity](e) { t =>
       isPackageOrClassOrTraitOrObject = t.isPackage || t.isClass || t.isTrait || t.isObject || t.isRootPackage
       isClassOrTrait = t.isClass || t.isTrait
@@ -201,12 +201,13 @@ abstract class JsonBuilder { builder =>
         vParams = v
         tParams = t
       }
+      val vis = me.visibility
       if (compactFlags) {
-        if (me.visibility.isProtected) set(j, 'o')
-        if (me.visibility.isPublic   ) set(j, 'u')
+        if (vis.isProtected) set(j, 'o')
+        if (vis.isPublic   ) set(j, 'u')
       } else {
-        if (me.visibility.isProtected) j += "isProtected"  -> true
-        if (me.visibility.isPublic   ) j += "isPublic"     -> true
+        if (vis.isProtected) j += "isProtected"  -> true
+        if (vis.isPublic   ) j += "isPublic"     -> true
       }
 
       // XXX TODO: owner is `Option[Entity] in 2.12, and `Entity` in 2.13

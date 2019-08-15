@@ -323,15 +323,22 @@ Page.prototype.createOrGetDOM = function(view, cont) {
 Page.prototype.loadDependencies = function(cont) {
   var that = this;
   var base = this.model[0], pagesNeeded = [], seen = {};
-  if(base.linearization) {
-    for(var i=0; i<base.linearization.length; i++) {
-      var lin = base.linearization[i];
-      if(typeof lin === "object" && lin.hasOwnProperty("length") && lin[0] != this.model._no && !seen[lin[0]]) {
-        seen[lin[0]] = true;
-        pagesNeeded[pagesNeeded.length] = lin[0];
+
+  function addNeeded(a) {
+    if(a) {
+      for(var i=0; i<a.length; i++) {
+        var ref = a[i];
+        if(typeof ref === "object" && ref.hasOwnProperty("length") && ref[0] != that.model._no && !seen[ref[0]]) {
+          seen[ref[0]] = true;
+          pagesNeeded[pagesNeeded.length] = ref[0];
+        }
       }
     }
   }
+
+  addNeeded(base.linearization);
+  addNeeded(base.members);
+
   if(pagesNeeded.length) View.showMessage("Loading "+pagesNeeded.length+" additional models...");
   loadAuxModels(pagesNeeded, function(aux) {
     that.models = aux;
