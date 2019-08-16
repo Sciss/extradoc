@@ -3,7 +3,13 @@
 A variant of the scala-doc documentation tool that can output JSON format.
 Original code for Scala 2.8 by [Stefan Zeiger](https://github.com/szeiger/extradoc),
 updated for Scala 2.12 and 2.13 by Hanns Holger Rutz. Note: not all problems in the
-migration have been fixed yet, this is experimental. License is BSD 2-clause.
+migration have been fixed yet, this is experimental. The original license
+was BSD 2-clause. As I am extending the project, incorporating my changes and
+new code, the updated project is published under the
+[GNU Lesser General Public License]() v2.1+.
+
+The plan is to add a binary database output option, and to add an sbt plug-in
+to generate it, possibly across multiple sources in the fashion of _sbt-unidoc_.
 
 Below is the original read-me.
 
