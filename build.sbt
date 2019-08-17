@@ -2,6 +2,7 @@ lazy val baseName   = "ExtraDoc"
 lazy val baseNameL  = baseName.toLowerCase()
 
 lazy val commonSettings = Seq(
+  version            := "0.1.0-SNAPSHOT",
   organization       := "de.sciss",
   scalaVersion       := "2.12.9",
   licenses           := Seq("LGPL v2.1+" -> url("http://www.gnu.org/licenses/lgpl-2.1.txt")),
@@ -34,7 +35,7 @@ lazy val publishSettings = Seq(
 )
 
 lazy val root = project.in(file("."))
-  .aggregate(core, sbtPlugin)
+  .aggregate(core, plugin)
   .settings(commonSettings)
   .settings(
     name := baseName,
@@ -43,7 +44,7 @@ lazy val root = project.in(file("."))
 lazy val core = project.withId(s"$baseNameL-core").in(file("core"))
   .settings(commonSettings)
   .settings(
-    name        := s"$baseName - Core",
+    name        := s"$baseName-core",  // note: overrides auto-derived name from `withId`!
     description := "A Scala API doc generator with JSON output",
     libraryDependencies ++= Seq(
       "org.scala-lang"          %  "scala-compiler" % scalaVersion.value,
@@ -51,9 +52,14 @@ lazy val core = project.withId(s"$baseNameL-core").in(file("core"))
     )
   )
 
-lazy val sbtPlugin = project.withId(s"$baseNameL-sbt").in(file("sbtPlugin"))
+lazy val plugin = project.withId(s"sbt-$baseNameL").in(file("sbtPlugin"))
+  .enablePlugins(ScriptedPlugin)
   .dependsOn(core)
   .settings(commonSettings)
   .settings(
-    name := s"$baseName - sbt Plugin",
+    name      := s"sbt-$baseName",  // note: overrides auto-derived name from `withId`!
+    sbtPlugin := true,
+    // cf. https://www.scala-sbt.org/1.x/docs/Testing-sbt-plugins.html
+    scriptedLaunchOpts ++= Seq("-Xmx1024M", s"-Dplugin.version=${version.value}"),
+    scriptedBufferLog := false
   )

@@ -6,12 +6,15 @@ updated for Scala 2.12 and 2.13 by Hanns Holger Rutz. Note: not all problems in 
 migration have been fixed yet, this is experimental. The original license
 was BSD 2-clause. As I am extending the project, incorporating my changes and
 new code, the updated project is published under the
-[GNU Lesser General Public License]() v2.1+.
+[GNU Lesser General Public License](https://raw.githubusercontent.com/Sciss/extradoc/master/LICENSE) v2.1+.
 
-The plan is to add a binary database output option, and to add an sbt plug-in
-to generate it, possibly across multiple sources in the fashion of _sbt-unidoc_.
+The original extradoc went into module `core`. A second module `plugin` is being
+added for an sbt plugin that runs extradoc across an aggregated project. The
+sources here are mostly adapted from [sbt-unidoc]https://github.com/sbt/sbt-unidoc), 
+provided under the Apache License v2, again here in the modification and extension 
+released under LGPL v2.1+.
 
-Below is the original read-me.
+Below is the original read-me of extradoc.
 
 ---
 
