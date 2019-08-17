@@ -53,7 +53,7 @@ object ExtraDoc extends CompilerSupport {
     reporter.error(FakePos("scalac"), s"$msg\n  scalac -help  gives more information")
   }
 
-  def process(args: Array[String]): Unit = {
+  def process(args: Array[String]): Boolean = {
     
     val docSettings = new ExtraDocSettings(error)
     docSettings.YpresentationAnyThread.value = true // because we use nsc.interactive.Global
@@ -98,11 +98,12 @@ object ExtraDoc extends CompilerSupport {
         summary(reporter)
       }
     }
+
+    !reporter.hasErrors
   }
 
-
   def main(args: Array[String]): Unit = {
-    process(args)
-    sys.exit(if (reporter.hasErrors) 1 else 0)
+    val ok = process(args)
+    sys.exit(if (ok) 0 else 1)
   }
 }
