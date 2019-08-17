@@ -3,57 +3,58 @@ package de.sciss.extradoc
 import java.io.File
 
 import sbt.Keys.{Classpath, TaskStreams}
-import sbt.{Configuration, File, URL}
+import sbt.{Configuration, File, Fork, ForkOptions, URL}
 import xsbti.compile.Compilers
 
 object RunExtraDoc {
-  // This is straight out of docTaskSettings in Defaults.scala.
-  def apply(cache       : File,
-            compilers   : Compilers,
-            sources     : Seq[File],
-            cp          : Classpath,
-            scalaOptions: Seq[String],
-            javaOptions : Seq[String],
-            apiMappings : Map[File, URL],
-            maxErrors   : Int,
-            out         : File,
-            config      : Configuration,
-            streams     : TaskStreams,
-            srcPosMap   : Seq[xsbti.Position => Option[xsbti.Position]]
+  def apply(cache         : File,
+            compilers     : Compilers,
+            plugInCp      : Classpath,
+            sources       : Seq[File],
+            projectCp     : Classpath,
+            scalacOptions : Seq[String],
+            javacOptions  : Seq[String],
+            apiMappings   : Map[File, URL],
+            maxErrors     : Int,
+            out           : File,
+            config        : Configuration,
+            streams       : TaskStreams,
+            srcPosMap     : Seq[xsbti.Position => Option[xsbti.Position]]
            ): File = {
 
     import streams.log.info
 
-    info(s"RunExtraDoc(sources = $sources, cp = $cp, apiMappings = $apiMappings, out = $out)")
+    info(s"RunExtraDocn - plugin classpath = $plugInCp")
+//    info(s"RunExtraDoc(sources = $sources, cp = $cp, apiMappings = $apiMappings, out = $out)")
+    info(s"RunExtraDoc - invocation classpath = $projectCp")
 
-//    val home = sys.props("user.home")
-//    val sv                = util.Properties.versionNumberString
-//    //    val major             = if (sv.startsWith("2.12")) "2.12" else "2.13"
-//
-//    val pScalaLib      = s"$home/.ivy2/cache/org.scala-lang/scala-library/jars/scala-library-$sv.jar"
-//    //    val pScalaCompiler = s"$home/.ivy2/cache/org.scala-lang/scala-compiler/jars/scala-compiler-$sv.jar"
-//    //    val pScalaReflect  = s"$home/.ivy2/cache/org.scala-lang/scala-reflect/jars/scala-reflect-$sv.jar"
-//    //    val pScalaXml      = s"$home/.ivy2/cache/org.scala-lang.modules/scala-xml_$major/bundles/scala-xml_$major-1.2.0.jar"
-//    //    val paths = Seq(pScalaLib, pScalaCompiler, pScalaReflect, pScalaXml)
+    info(s"RunExtraDoc - output path = $out")
 
+    val pluginCpS   = plugInCp .map(_.data.getPath).mkString(File.pathSeparator)
+    val projectCpS  = projectCp.map(_.data.getPath).mkString(File.pathSeparator)
+//    val cpS         = (plugInCp ++ projectCp).map(_.data.getPath).mkString(File.pathSeparator)
 
-//    val paths = Seq[String](pScalaLib)
-
-    val classPathS  = cp.map(_.data.getPath).mkString(File.pathSeparator)
     val pathOutS    = out.getPath
     val sourcesS    = sources.map(_.getPath)
 
-    val callArgs = Seq(
+    val extraDocArgs = Seq(
       "-doc-format:explorer",
-      "-classpath", classPathS,
+      "-classpath", projectCpS,
       "-d", pathOutS
     ) ++ sourcesS
 
     out.mkdirs()
 
-    println(callArgs.mkString("extradoc: ", " ", ""))
+    val forkOpt   = ForkOptions()
+    val javaArgs  = Seq(
+      "-cp", pluginCpS, "de.sciss.extradoc.ExtraDoc"
+    )
+    val exitCote  = Fork.java(forkOpt, javaArgs ++ extraDocArgs)
+    info(s"exit-code: $exitCote")
 
-    val ok = ExtraDoc.process(callArgs.toArray)
+//    println(callArgs.mkString("extradoc: ", " ", ""))
+
+//    val ok = ExtraDoc.process(callArgs.toArray)
 //    if (!ok) ...
 
     out // new File("nada")

@@ -10,6 +10,8 @@ object ExtraDocPlugin extends AutoPlugin {
   override def trigger  : PluginTrigger = allRequirements
   override def requires : Plugins       = JvmPlugin
 
+  // https://github.com/sbt/sbt-web/blob/a04454faf8ea3b66092afd40da645dae9b8c211e/src/main/scala/com/typesafe/sbt/web/SbtWeb.scala#L145
+
   object autoImport {
     val extradoc                    = taskKey   [File]                ("Creates extradoc for all aggregates.")
     val extradocAllSources          = taskKey   [Seq[Seq[File]]]      ("All sources.")
@@ -24,27 +26,35 @@ object ExtraDocPlugin extends AutoPlugin {
 
   import autoImport.{Extradoc => Cfg, _}
 
+  override def projectConfigurations: Seq[Configuration] =
+    super.projectConfigurations :+ Cfg
+
   override lazy val projectSettings: Seq[Setting[_]] =
     inConfig(Cfg)(Defaults.configSettings ++ baseExtradocTasks(Compile)) ++ Seq(
-      extradoc in Compile := (extradoc in Cfg).value
+      extradoc in Compile := (extradoc in Cfg).value,
+      libraryDependencies ++= Seq(
+        "de.sciss"                %% "extradoc-core"  % "0.1.0-SNAPSHOT"  % Cfg,
+        "org.scala-lang.modules"  %% "scala-xml"      % "1.2.0"           % Cfg // why does this disappear?
+      )
     )
 
   def baseExtradocTasks(sc: Configuration): Seq[Setting[_]] = Seq(
     target in extradoc := crossTarget.value / "extradoc",
     extradocAllSources in extradoc := allScalaSources.value,
     extradoc := RunExtraDoc(
-      streams.value.cacheDirectory,
-      (compilers in extradoc).value,
-      (sources        in extradoc).value,
-      (fullClasspath  in extradoc).value,
-      (scalacOptions  in extradoc).value,
-      (javacOptions   in extradoc).value,
-      (apiMappings    in extradoc).value,
-      (maxErrors      in extradoc).value,
-      (target         in extradoc).value,
-      configuration.value,
-      streams.value,
-      (sourcePositionMappers in extradoc).value
+      cache         = streams.value.cacheDirectory,
+      compilers     = (compilers in extradoc).value,
+      plugInCp      = (managedClasspath in Cfg).value,
+      sources       = (sources        in extradoc).value,
+      projectCp     = (fullClasspath  in extradoc).value,
+      scalacOptions = (scalacOptions  in extradoc).value,
+      javacOptions  = (javacOptions   in extradoc).value,
+      apiMappings   = (apiMappings    in extradoc).value,
+      maxErrors     = (maxErrors      in extradoc).value,
+      out           = (target         in extradoc).value,
+      config        = configuration.value,
+      streams       = streams.value,
+      srcPosMap     = (sourcePositionMappers in extradoc).value
     ),
     compilers     in extradoc := (compilers in sc).value,
     sources       in extradoc := (extradocAllSources in extradoc).value.flatten.sortBy { _.getAbsolutePath },
@@ -87,6 +97,6 @@ object ExtraDocPlugin extends AutoPlugin {
     sources.all(f)
   }
 
-  override lazy val buildSettings : Seq[Setting[_]] = Seq()
-  override lazy val globalSettings: Seq[Setting[_]] = Seq()
+//  override lazy val buildSettings : Seq[Setting[_]] = Seq()
+//  override lazy val globalSettings: Seq[Setting[_]] = Seq()
 }

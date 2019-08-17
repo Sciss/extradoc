@@ -18,6 +18,7 @@ lazy val lScalaColliderUGens  = RootProject(uri(s"git://github.com/Sciss/ScalaCo
 lazy val lScalaOsc            = RootProject(uri(s"git://github.com/Sciss/ScalaOSC.git#v${deps.scalaOsc}"))
 
 lazy val lList = Seq(lAudioFile, lScalaCollider, lScalaColliderUGens, /*lScalaColliderSwing,*/ lScalaOsc)
+//lazy val lList = Seq(lAudioFile)
 
 scalaVersion in ThisBuild := "2.12.9"
 

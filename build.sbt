@@ -44,7 +44,7 @@ lazy val root = project.in(file("."))
 lazy val core = project.withId(s"$baseNameL-core").in(file("core"))
   .settings(commonSettings)
   .settings(
-    name        := s"$baseName-core",  // note: overrides auto-derived name from `withId`!
+    name        := s"$baseName-Core",
     description := "A Scala API doc generator with JSON output",
     libraryDependencies ++= Seq(
       "org.scala-lang"          %  "scala-compiler" % scalaVersion.value,
@@ -54,7 +54,7 @@ lazy val core = project.withId(s"$baseNameL-core").in(file("core"))
 
 lazy val plugin = project.withId(s"sbt-$baseNameL").in(file("sbtPlugin"))
   .enablePlugins(ScriptedPlugin)
-  .dependsOn(core)
+//  .dependsOn(core)
   .settings(commonSettings)
   .settings(
     name      := s"sbt-$baseName",  // note: overrides auto-derived name from `withId`!
