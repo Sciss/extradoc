@@ -22,7 +22,7 @@ object RunExtraDoc {
 
     import streams.log.info
 
-    info(s"RunExtraDoc(cache = $cache, compilers = $compilers, sources = $sources, cp = $cp, apiMappings = $apiMappings)")
+    info(s"RunExtraDoc(sources = $sources, cp = $cp, apiMappings = $apiMappings)")
 
     new File("nada")
   }

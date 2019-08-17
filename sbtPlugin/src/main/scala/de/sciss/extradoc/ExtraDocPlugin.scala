@@ -25,7 +25,7 @@ object ExtraDocPlugin extends AutoPlugin {
   import autoImport.{Extradoc => Cfg, _}
 
   override lazy val projectSettings: Seq[Setting[_]] =
-    inConfig(Cfg)(Defaults.configSettings) ++ baseExtradocTasks(Compile) ++ Seq(
+    inConfig(Cfg)(Defaults.configSettings ++ baseExtradocTasks(Compile)) ++ Seq(
       extradoc in Compile := (extradoc in Cfg).value
     )
 
