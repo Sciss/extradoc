@@ -6,6 +6,7 @@ import sbt._
 import sbt.plugins.JvmPlugin
 
 object ExtraDocPlugin extends AutoPlugin {
+  private val extraDocVersion = "0.1.0-SNAPSHOT"
 
   override def trigger  : PluginTrigger = allRequirements
   override def requires : Plugins       = JvmPlugin
@@ -33,8 +34,7 @@ object ExtraDocPlugin extends AutoPlugin {
     inConfig(Cfg)(Defaults.configSettings ++ baseExtradocTasks(Compile)) ++ Seq(
       extradoc in Compile := (extradoc in Cfg).value,
       libraryDependencies ++= Seq(
-        "de.sciss"                %% "extradoc-core"  % "0.1.0-SNAPSHOT"  % Cfg,
-        "org.scala-lang.modules"  %% "scala-xml"      % "1.2.0"           % Cfg // why does this disappear?
+        "de.sciss" %% "extradoc-core" % extraDocVersion % Cfg,
       )
     )
 
@@ -57,10 +57,10 @@ object ExtraDocPlugin extends AutoPlugin {
       srcPosMap     = (sourcePositionMappers in extradoc).value
     ),
     compilers     in extradoc := (compilers in sc).value,
-    sources       in extradoc := (extradocAllSources in extradoc).value.flatten.sortBy { _.getAbsolutePath },
+    sources       in extradoc := (extradocAllSources in extradoc).value.flatten.sortBy(_.getAbsolutePath),
     scalacOptions in extradoc := (scalacOptions in (sc, doc)).value,
     javacOptions  in extradoc := (javacOptions  in (sc, doc)).value,
-    fullClasspath in extradoc := (extradocAllClasspaths in extradoc).value.flatten.distinct.sortBy { _.data.getName },
+    fullClasspath in extradoc := (extradocAllClasspaths in extradoc).value.flatten.distinct.sortBy(_.data.getName),
     extradocAllClasspaths in extradoc := allClasspathsTask.value,
     apiMappings in extradoc := {
       val all     = (extradocAllAPIMappings in extradoc).value

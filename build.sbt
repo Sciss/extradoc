@@ -63,3 +63,16 @@ lazy val plugin = project.withId(s"sbt-$baseNameL").in(file("sbtPlugin"))
     scriptedLaunchOpts ++= Seq("-Xmx1024M", s"-Dplugin.version=${version.value}"),
     scriptedBufferLog := false
   )
+
+lazy val dotterTest = project.in(file("dotterTest"))
+  .dependsOn(core)
+  .settings(commonSettings)
+  .settings(
+    name := s"$baseName-dotter-test",
+    libraryDependencies ++= Seq(
+      "de.sciss"          %% "dotterweide-ui"     % "0.2.3",
+      "de.sciss"          %% "dotterweide-scala"  % "0.2.3",
+      "de.sciss"          %% "scalacollider"      % "1.28.4",
+      "com.typesafe.play" %% "play-json"          % "2.7.4",
+    )
+  )
