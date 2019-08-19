@@ -82,7 +82,11 @@ class ScalaDocLookUp(language: ScalaLanguage, frame: MainFrame, docModule: Modul
           pkgOpt match {
             case Some(pkg) =>
               println(s"Doc page is ${pkg.page}")
-              val pgOpt = ReadModelTest.readPage(pkg.page)
+              val pgIdxOpt = className match {
+                case Some(name) => pkg.entryMap.get(name).map(_.page)
+                case None       => Some(pkg.page)
+              }
+              val pgOpt = pgIdxOpt.flatMap(ReadModelTest.readPage)
               pgOpt match {
                 case Some(p) =>
                   println("MEMBERS:")
