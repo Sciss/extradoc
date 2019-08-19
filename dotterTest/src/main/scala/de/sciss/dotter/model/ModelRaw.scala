@@ -12,7 +12,7 @@ object Settings {
       JsSuccess(Settings()) // XXX TODO
   }
 }
-case class Settings()
+final case class Settings()
 
 object EntryKind {
   case object Object  extends EntryKind
@@ -59,12 +59,10 @@ object GlobalRaw {
         while (it.hasNext) {
           val eRes: JsResult[(SectionRaw, String)] = it.next() match {
             case (k, JsString(v)) =>
+              def failKey = JsError(s"global.names - key is not a section pair: '$k'")
+
               val i = k.indexOf(",")
-              if (i < 0) {
-                val msg = s"global.names - key is not a section pair: '$k'"
-                // println(s"COMMA EXPECTED: $msg")
-                JsError(msg)
-              }
+              if (i < 0) failKey
               else {
                 // XXX TODO damn, this is awful, is there no simpler way?
                 (for {
@@ -72,17 +70,12 @@ object GlobalRaw {
                   sec  <- Try(k.substring(i + 1 ).toInt)
                 } yield SectionRaw(page, sec)) match {
                   case Success(sec) => JsSuccess(sec -> v)
-                  case Failure(ex)  =>
-                    val msg = s"global.names - key is not a section pair: '$k'"
-                    // println(s"PARSE SECTION: $msg")
-                    JsError(msg)
+                  case Failure(_)   => failKey
                 }
               }
 
             case (_, v) =>
-              val msg = s"global.names - value is not a JSON string: $v"
-              // println(s"STRING EXPECTED: $msg")
-              JsError(msg)
+              JsError(s"global.names - value is not a JSON string: $v")
           }
           eRes match {
             case JsSuccess(pair, _) => b += pair
@@ -121,18 +114,33 @@ final case class GlobalRaw(names: Map[SectionRaw, String], packages: Vec[Package
 
 /////
 
+object CommentRaw {
+  implicit def reads: Reads[CommentRaw] = (
+    (JsPath \ "short" \ "_html").read[String] and
+    (JsPath \ "body").readNullable((JsPath \ "_html").read[String])
+  )(CommentRaw(_, _, see = Nil))
+}
+final case class CommentRaw(short: String, body: Option[String], see: List[SectionRaw])
+
 object MemberRaw {
   implicit val reads: Reads[MemberRaw] = (
-    (JsPath \ "name"  ).readNullable[String] and
-    (JsPath \ "qName" ).readNullable[String]
-  )(MemberRaw(_, _, Nil, Nil, None))
+    (JsPath \ "name"    ).readNullable[String] and
+    (JsPath \ "qName"   ).readNullable[String] and
+    (JsPath \ "comment" ).readNullable[CommentRaw]
+  )(MemberRaw(_, _, parents = Nil, subClasses = Nil,
+    companion = None, _))
 }
-case class MemberRaw(name: Option[String], qName: Option[String],
-                     parents: List[Int], subClasses: List[SectionRaw],
-                     companion: Option[SectionRaw]
-                    )
+final case class MemberRaw(name       : Option[String],
+                           qName      : Option[String],
+                           parents    : List[Int],
+                           subClasses : List[SectionRaw],
+                           companion  : Option[SectionRaw],
+                           comment    : Option[CommentRaw]
+                          )
 
 object PageRaw {
   implicit val reads: Reads[PageRaw] = JsPath.read[Vec[MemberRaw]].map(PageRaw.apply)
 }
-case class PageRaw(members: Vec[MemberRaw])
+case class PageRaw(members: Vec[MemberRaw]) {
+  def build: Page = ???
+}

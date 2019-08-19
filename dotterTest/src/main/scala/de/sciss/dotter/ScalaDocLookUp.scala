@@ -81,14 +81,18 @@ class ScalaDocLookUp(language: ScalaLanguage, frame: MainFrame, docModule: Modul
           val pkgOpt = docGlobal.packageMap.get(path)
           pkgOpt match {
             case Some(pkg) =>
-              println(s"Doc page is ${pkg.page}")
               val pgIdxOpt = className match {
                 case Some(name) => pkg.entryMap.get(name).map(_.page)
                 case None       => Some(pkg.page)
               }
+              println(s"Doc page is $pgIdxOpt")
               val pgOpt = pgIdxOpt.flatMap(ReadModelTest.readPage)
               pgOpt match {
                 case Some(p) =>
+                  p.members.headOption.foreach(_.comment.foreach { c =>
+                    println("SHORT COMMENT:")
+                    println(c.short)
+                  })
                   println("MEMBERS:")
                   p.members.foreach(m => println(m.name.orElse(m.qName).getOrElse("?")))
 

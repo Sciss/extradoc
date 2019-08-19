@@ -205,7 +205,8 @@ abstract class JsonBuilder { builder =>
     as[m.MemberEntity](e) { me =>
       me.comment.foreach { c =>
         val (comment, v, t) = createComment(c)
-        j += "comment" -> comment
+//        j += "comment" -> comment
+        j.addOpt("comment", comment)
         vParams = v
         tParams = t
       }
