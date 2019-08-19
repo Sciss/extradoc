@@ -5,16 +5,6 @@ import play.api.libs.json.{JsError, JsPath, JsResult, JsString, JsSuccess, JsVal
 
 import scala.collection.immutable.{IndexedSeq => Vec}
 
-object Section {
-//  implicit object reads extends Reads[Section] {
-//    def reads(json: JsValue): JsResult[Section] = json match {
-//      case JsString(s) => ...
-//      case _ => ..
-//    }
-//  }
-}
-final case class Section(page: Int, section: Int)
-
 object Settings {
   implicit object reads extends Reads[Settings] {
     def reads(json: JsValue): JsResult[Settings] =

@@ -66,15 +66,15 @@ class ScalaDocLookUp(language: ScalaLanguage, frame: MainFrame, docModule: Modul
     }
   }
 
-  private val docGlobal = ReadModelTest.run().get
+  private val docGlobal = ReadModelTest.readGlobal().get
 
   private def docForType(tpe: NodeType): Unit = tpe match {
     case sd: ScalaType =>
-      val pkgPath: Option[String] = sd match {
-        case ClassType   (pkg, _) => Some(pkg.presentation) // pkg.scalaDocPath()
-        case ModuleType  (pkg, _) => Some(pkg.presentation) // pkg.scalaDocPath()
-        case PackageType (name)   => Some(name)
-        case _                    => None
+      val (pkgPath: Option[String], className: Option[String]) = sd match {
+        case ClassType   (pkg, name)  => (Some(pkg.presentation), Some(name)) // pkg.scalaDocPath()
+        case ModuleType  (pkg, name)  => (Some(pkg.presentation), Some(name)) // pkg.scalaDocPath()
+        case PackageType (name)       => (Some(name), None)
+        case _                        => (None, None)
       }
       pkgPath match {
         case Some(path) =>
@@ -82,6 +82,15 @@ class ScalaDocLookUp(language: ScalaLanguage, frame: MainFrame, docModule: Modul
           pkgOpt match {
             case Some(pkg) =>
               println(s"Doc page is ${pkg.page}")
+              val pgOpt = ReadModelTest.readPage(pkg.page)
+              pgOpt match {
+                case Some(p) =>
+                  println("MEMBERS:")
+                  p.members.foreach(m => println(m.name.orElse(m.qName).getOrElse("?")))
+
+                case None =>
+                  printWarn(s"No page information for ${pkg.page}")
+              }
 
             case None =>
               printWarn(s"No package information for ${sd.presentation}")
